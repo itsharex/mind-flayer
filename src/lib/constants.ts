@@ -78,7 +78,6 @@ export function useActionConstants() {
       edit: t("edit"),
       like: t("like"),
       dislike: t("dislike"),
-      share: t("share"),
       regenerate: t("regenerate")
     }),
     [t]

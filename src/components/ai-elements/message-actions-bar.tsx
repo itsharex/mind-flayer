@@ -4,7 +4,6 @@ import {
   CopyIcon,
   PencilIcon,
   RefreshCwIcon,
-  ShareIcon,
   ThumbsDownIcon,
   ThumbsUpIcon
 } from "lucide-react"
@@ -142,7 +141,7 @@ export const AssistantMessageActionsBar = ({
   className,
   ...props
 }: AssistantMessageActionsBarProps) => {
-  const { like, dislike, share, regenerate } = useActionConstants()
+  const { like, dislike, regenerate } = useActionConstants()
 
   return (
     <div className={cn("flex items-center gap-0.5 text-muted-foreground", className)} {...props}>
@@ -182,25 +181,6 @@ export const AssistantMessageActionsBar = ({
           </TooltipTrigger>
           <TooltipContent side="bottom">
             <p>{dislike}</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      <TooltipProvider>
-        <Tooltip disableHoverableContent={true}>
-          <TooltipTrigger asChild>
-            <Button
-              size="icon-xs"
-              type="button"
-              variant="ghost"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={onShare}
-            >
-              <ShareIcon className="size-3.5" />
-              <span className="sr-only">{share}</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <p>{share}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
