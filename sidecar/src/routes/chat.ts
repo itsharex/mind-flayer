@@ -68,6 +68,8 @@ export async function handleChat(c: Context, globalAbortController: AbortControl
     // Create and return streaming response
     return await createStreamResponse({
       model,
+      modelProvider: provider,
+      modelId,
       messages,
       tools: requestTools,
       toolChoice,

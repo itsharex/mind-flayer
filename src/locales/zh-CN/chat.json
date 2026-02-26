@@ -23,7 +23,24 @@
   "tokens": {
     "input": "{{count}} 输入",
     "output": "{{count}} 输出",
-    "tokens": "token"
+    "tokens": "token",
+    "openDetails": "查看 token 与费用详情",
+    "usageTitle": "Token 用量",
+    "costTitle": "费用（{{currency}}）",
+    "inputTotal": "输入",
+    "outputTotal": "输出",
+    "cachedReadInput": "缓存读取输入",
+    "cachedWriteInput": "缓存写入输入",
+    "total": "总计",
+    "costInput": "输入",
+    "costCachedRead": "缓存读取",
+    "costCachedWrite": "缓存写入",
+    "costOutput": "输出",
+    "costTotal": "总计",
+    "estimated": "估算",
+    "costUnavailable": "当前消息模型暂无可用计费信息",
+    "notAvailable": "暂无",
+    "belowMinimumCost": "<{{symbol}}0.0001"
   },
   "contextWindowUsage": {
     "title": "上下文窗口",

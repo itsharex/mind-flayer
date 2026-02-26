@@ -12,10 +12,13 @@ import type { ProviderFormData } from "@/types/settings"
 
 type ProviderIconComponent = React.ComponentType<{ className?: string }>
 
+export type PricingCurrency = "USD" | "CNY"
+
 /**
- * Model pricing in USD per 1M tokens.
+ * Model pricing per 1M tokens with currency metadata.
  */
 export interface ModelPricing {
+  currency: PricingCurrency
   input: number | null
   output: number | null
   cachedRead: number | null
@@ -54,10 +57,11 @@ export const MODEL_PROVIDERS: Provider[] = [
         api_id: "MiniMax-M2.5",
         contextWindow: 204800,
         pricing: {
-          input: 0.3,
-          output: 1.2,
-          cachedRead: 0.03,
-          cachedWrite: 0.375
+          currency: "CNY",
+          input: 2.1,
+          output: 8.4,
+          cachedRead: 0.21,
+          cachedWrite: 2.625
         }
       },
       {
@@ -65,10 +69,11 @@ export const MODEL_PROVIDERS: Provider[] = [
         api_id: "MiniMax-M2.5-highspeed",
         contextWindow: 204800,
         pricing: {
-          input: 0.6,
-          output: 2.4,
-          cachedRead: 0.03,
-          cachedWrite: 0.375
+          currency: "CNY",
+          input: 4.2,
+          output: 16.8,
+          cachedRead: 0.21,
+          cachedWrite: 2.625
         }
       },
       {
@@ -76,10 +81,11 @@ export const MODEL_PROVIDERS: Provider[] = [
         api_id: "MiniMax-M2.1",
         contextWindow: 204800,
         pricing: {
-          input: 0.3,
-          output: 1.2,
-          cachedRead: 0.03,
-          cachedWrite: 0.375
+          currency: "CNY",
+          input: 2.1,
+          output: 8.4,
+          cachedRead: 0.21,
+          cachedWrite: 2.625
         }
       },
       {
@@ -87,10 +93,11 @@ export const MODEL_PROVIDERS: Provider[] = [
         api_id: "MiniMax-M2.1-highspeed",
         contextWindow: 204800,
         pricing: {
-          input: 0.6,
-          output: 2.4,
-          cachedRead: 0.03,
-          cachedWrite: 0.375
+          currency: "CNY",
+          input: 4.2,
+          output: 16.8,
+          cachedRead: 0.21,
+          cachedWrite: 2.625
         }
       },
       {
@@ -98,10 +105,11 @@ export const MODEL_PROVIDERS: Provider[] = [
         api_id: "MiniMax-M2",
         contextWindow: 204800,
         pricing: {
-          input: 0.3,
-          output: 1.2,
-          cachedRead: 0.03,
-          cachedWrite: 0.375
+          currency: "CNY",
+          input: 2.1,
+          output: 8.4,
+          cachedRead: 0.21,
+          cachedWrite: 2.625
         }
       }
     ]
@@ -179,6 +187,20 @@ export const UPCOMING_PROVIDERS: Provider[] = [
 ]
 
 export const ALL_PROVIDERS = [...MODEL_PROVIDERS, ...WEB_SEARCH_PROVIDERS, ...UPCOMING_PROVIDERS]
+
+export function findModelPricing(
+  providerId: string | null | undefined,
+  modelId: string | null | undefined
+): ModelPricing | undefined {
+  if (!providerId || !modelId) {
+    return undefined
+  }
+
+  const provider = ALL_PROVIDERS.find(item => item.id === providerId)
+  const model = provider?.models?.find(item => item.api_id === modelId)
+
+  return model?.pricing ? { ...model.pricing } : undefined
+}
 
 export const DEFAULT_FORM_DATA = ALL_PROVIDERS.reduce(
   (acc, provider) => {

@@ -82,6 +82,7 @@ import {
   useToolButtonConstants,
   useTooltipConstants
 } from "@/lib/constants"
+import { findModelPricing } from "@/lib/provider-constants"
 import { generateTitle, getSidecarUrl } from "@/lib/sidecar-client"
 import { cn } from "@/lib/utils"
 import { openSettingsWindow, SettingsSection } from "@/lib/window-manager"
@@ -117,6 +118,8 @@ type SaveMessageOptions = {
 
 type AssistantMessageMetadata = {
   totalUsage?: LanguageModelUsage
+  modelProvider?: string
+  modelId?: string
   thinkingDuration?: number
   toolDurations?: Record<string, number>
 }
@@ -1219,6 +1222,10 @@ const AppChatInner = ({
                 .map(part => part.text)
                 .join("")
               const metadata = message.metadata as AssistantMessageMetadata | undefined
+              const messageModelPricing = findModelPricing(
+                metadata?.modelProvider,
+                metadata?.modelId
+              )
               const isLastMessage = index === messages.length - 1
               const isCurrentlyStreaming = status === "streaming" && isLastMessage
               const lastPart = message.parts[message.parts.length - 1]
@@ -1342,6 +1349,9 @@ const AppChatInner = ({
                           <AssistantMessageActionsBar
                             messageText={messageText}
                             tokenInfo={metadata?.totalUsage}
+                            modelProvider={metadata?.modelProvider}
+                            modelId={metadata?.modelId}
+                            modelPricing={messageModelPricing}
                             onLike={() => {
                               /** noop */
                             }}

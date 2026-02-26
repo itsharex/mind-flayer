@@ -16,6 +16,8 @@ import { buildSystemPrompt } from "../utils/system-prompt-builder"
  */
 export interface StreamHandlerOptions {
   model: LanguageModel
+  modelProvider: string
+  modelId: string
   messages: UIMessage[]
   tools: ToolSet
   toolChoice: ToolChoice<ToolSet>
@@ -30,7 +32,7 @@ export interface StreamHandlerOptions {
  * @returns Stream response for the client
  */
 export async function createStreamResponse(options: StreamHandlerOptions) {
-  const { model, messages, tools, toolChoice, abortSignal } = options
+  const { model, modelProvider, modelId, messages, tools, toolChoice, abortSignal } = options
 
   // Process system prompt
   const systemPrompt = buildSystemPrompt()
@@ -56,12 +58,16 @@ export async function createStreamResponse(options: StreamHandlerOptions) {
     messageMetadata: ({ part }) => {
       if (part.type === "start") {
         return {
-          createdAt: Date.now()
+          createdAt: Date.now(),
+          modelProvider,
+          modelId
         }
       }
       if (part.type === "finish") {
         return {
-          totalUsage: part.totalUsage
+          totalUsage: part.totalUsage,
+          modelProvider,
+          modelId
         }
       }
     },

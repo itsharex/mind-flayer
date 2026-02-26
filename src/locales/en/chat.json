@@ -24,7 +24,24 @@
   "tokens": {
     "input": "{{count}} input",
     "output": "{{count}} output",
-    "tokens": "tokens"
+    "tokens": "tokens",
+    "openDetails": "View token and cost details",
+    "usageTitle": "Token Usage",
+    "costTitle": "Cost ({{currency}})",
+    "inputTotal": "Input",
+    "outputTotal": "Output",
+    "cachedReadInput": "Cached read",
+    "cachedWriteInput": "Cached write",
+    "total": "Total",
+    "costInput": "Input",
+    "costCachedRead": "Cached read",
+    "costCachedWrite": "Cached write",
+    "costOutput": "Output",
+    "costTotal": "Total",
+    "estimated": "Estimated",
+    "costUnavailable": "Pricing unavailable",
+    "notAvailable": "N/A",
+    "belowMinimumCost": "<{{symbol}}0.0001"
   },
   "contextWindowUsage": {
     "title": "Context Window",
