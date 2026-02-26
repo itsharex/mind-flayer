@@ -30,7 +30,9 @@ export function useAvailableModels() {
             models.push({
               provider: provider.id,
               label: model.label,
-              api_id: model.api_id
+              api_id: model.api_id,
+              contextWindow: model.contextWindow,
+              pricing: model.pricing ? { ...model.pricing } : undefined
             })
           }
         }

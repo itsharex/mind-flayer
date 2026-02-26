@@ -7,6 +7,7 @@ import {
   isReasoningUIPart,
   isTextUIPart,
   isToolUIPart,
+  type LanguageModelUsage,
   lastAssistantMessageIsCompleteWithApprovalResponses,
   type ReasoningUIPart,
   type StepStartUIPart,
@@ -16,10 +17,11 @@ import {
 } from "ai"
 import { AtomIcon, CircleIcon, GlobeIcon, SparklesIcon, ZapIcon } from "lucide-react"
 import { nanoid } from "nanoid"
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import type { StickToBottomContext } from "use-stick-to-bottom"
+import { ContextWindowUsageIndicator } from "@/components/ai-elements/context-window-usage-indicator"
 import {
   Conversation,
   ConversationContent,
@@ -111,6 +113,12 @@ type SaveMessageOptions = {
   isDisconnect?: boolean
   isError?: boolean
   isNewChat?: boolean
+}
+
+type AssistantMessageMetadata = {
+  totalUsage?: LanguageModelUsage
+  thinkingDuration?: number
+  toolDurations?: Record<string, number>
 }
 
 type PendingPin = {
@@ -1169,6 +1177,19 @@ const AppChatInner = ({
   const isAwaitingAssistantReply =
     (status === "submitted" && lastMessage?.role === "user") ||
     ((status === "streaming" || status === "error") && lastMessage?.parts.length === 0)
+  const latestAssistantUsage = useMemo(() => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index]
+      if (message.role !== "assistant") {
+        continue
+      }
+      const metadata = message.metadata as AssistantMessageMetadata | undefined
+      if (metadata?.totalUsage) {
+        return metadata.totalUsage
+      }
+    }
+    return undefined
+  }, [messages])
 
   return (
     <div className="flex h-full flex-col">
@@ -1197,17 +1218,7 @@ const AppChatInner = ({
                 .filter(isTextUIPart)
                 .map(part => part.text)
                 .join("")
-              const metadata = message.metadata as
-                | {
-                    totalUsage?: {
-                      inputTokens: number
-                      outputTokens: number
-                      totalTokens: number
-                    }
-                    thinkingDuration?: number
-                    toolDurations?: Record<string, number>
-                  }
-                | undefined
+              const metadata = message.metadata as AssistantMessageMetadata | undefined
               const isLastMessage = index === messages.length - 1
               const isCurrentlyStreaming = status === "streaming" && isLastMessage
               const lastPart = message.parts[message.parts.length - 1]
@@ -1455,6 +1466,11 @@ const AppChatInner = ({
 
                 {/* Tools in Right */}
                 <PromptInputTools className="gap-2.5">
+                  <ContextWindowUsageIndicator
+                    contextWindow={selectedModel?.contextWindow}
+                    usage={latestAssistantUsage}
+                  />
+
                   {/* Submit button */}
                   <Tooltip disableHoverableContent={true} open={undefined}>
                     <TooltipTrigger asChild>

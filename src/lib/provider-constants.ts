@@ -12,6 +12,23 @@ import type { ProviderFormData } from "@/types/settings"
 
 type ProviderIconComponent = React.ComponentType<{ className?: string }>
 
+/**
+ * Model pricing in USD per 1M tokens.
+ */
+export interface ModelPricing {
+  input: number | null
+  output: number | null
+  cachedRead: number | null
+  cachedWrite: number | null
+}
+
+export interface ProviderModel {
+  label: string
+  api_id: string
+  contextWindow?: number | null
+  pricing?: ModelPricing
+}
+
 export interface Provider {
   id: string
   name: string
@@ -20,7 +37,7 @@ export interface Provider {
   icon: LucideIcon
   logo?: ProviderIconComponent
   disabled?: boolean
-  models?: Array<{ label: string; api_id: string }>
+  models?: ProviderModel[]
 }
 
 export const MODEL_PROVIDERS: Provider[] = [
@@ -32,11 +49,61 @@ export const MODEL_PROVIDERS: Provider[] = [
     icon: Bot,
     logo: MinimaxIcon,
     models: [
-      { label: "MiniMax M2.5", api_id: "MiniMax-M2.5" },
-      { label: "MiniMax M2.5 lightning", api_id: "MiniMax-M2.5-lightning" },
-      { label: "MiniMax M2.1", api_id: "MiniMax-M2.1" },
-      { label: "MiniMax M2.1 lightning", api_id: "MiniMax-M2.1-lightning" },
-      { label: "MiniMax M2", api_id: "MiniMax-M2" }
+      {
+        label: "MiniMax-M2.5",
+        api_id: "MiniMax-M2.5",
+        contextWindow: 204800,
+        pricing: {
+          input: 0.3,
+          output: 1.2,
+          cachedRead: 0.03,
+          cachedWrite: 0.375
+        }
+      },
+      {
+        label: "MiniMax-M2.5-highspeed",
+        api_id: "MiniMax-M2.5-highspeed",
+        contextWindow: 204800,
+        pricing: {
+          input: 0.6,
+          output: 2.4,
+          cachedRead: 0.03,
+          cachedWrite: 0.375
+        }
+      },
+      {
+        label: "MiniMax-M2.1",
+        api_id: "MiniMax-M2.1",
+        contextWindow: 204800,
+        pricing: {
+          input: 0.3,
+          output: 1.2,
+          cachedRead: 0.03,
+          cachedWrite: 0.375
+        }
+      },
+      {
+        label: "MiniMax-M2.1-highspeed",
+        api_id: "MiniMax-M2.1-highspeed",
+        contextWindow: 204800,
+        pricing: {
+          input: 0.6,
+          output: 2.4,
+          cachedRead: 0.03,
+          cachedWrite: 0.375
+        }
+      },
+      {
+        label: "MiniMax-M2",
+        api_id: "MiniMax-M2",
+        contextWindow: 204800,
+        pricing: {
+          input: 0.3,
+          output: 1.2,
+          cachedRead: 0.03,
+          cachedWrite: 0.375
+        }
+      }
     ]
   }
 ]

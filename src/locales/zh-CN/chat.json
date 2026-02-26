@@ -25,6 +25,13 @@
     "output": "{{count}} 输出",
     "tokens": "token"
   },
+  "contextWindowUsage": {
+    "title": "上下文窗口",
+    "summary": "{{used}} / {{limit}} tokens · {{percent}}%",
+    "unavailable": "当前模型未提供上下文窗口上限。",
+    "usedInputOnly": "当前输入已使用：{{used}} tokens",
+    "ariaLabel": "上下文窗口使用情况：{{summary}}"
+  },
   "sources": {
     "used": "使用了 {{count}} 个来源"
   },

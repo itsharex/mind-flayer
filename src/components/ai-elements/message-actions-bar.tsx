@@ -1,3 +1,4 @@
+import type { LanguageModelUsage } from "ai"
 import {
   CheckIcon,
   CopyIcon,
@@ -127,11 +128,7 @@ export type AssistantMessageActionsBarProps = ComponentProps<"div"> & {
   onShare?: () => void
   onRefresh?: () => void
   showRefresh?: boolean
-  tokenInfo?: {
-    inputTokens: number
-    outputTokens: number
-    totalTokens?: number
-  }
+  tokenInfo?: LanguageModelUsage
 }
 
 export const AssistantMessageActionsBar = ({

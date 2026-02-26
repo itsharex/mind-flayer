@@ -26,6 +26,13 @@
     "output": "{{count}} output",
     "tokens": "tokens"
   },
+  "contextWindowUsage": {
+    "title": "Context Window",
+    "summary": "{{used}} / {{limit}} tokens · {{percent}}%",
+    "unavailable": "Context window limit is unavailable for this model.",
+    "usedInputOnly": "Current input usage: {{used}} tokens",
+    "ariaLabel": "Context window usage: {{summary}}"
+  },
   "sources": {
     "used": "Used {{count}} sources"
   },

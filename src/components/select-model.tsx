@@ -14,6 +14,7 @@ import { ProviderLogo } from "@/components/ui/provider-logo"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAvailableModels } from "@/hooks/use-available-models"
 import { useDropdownTooltip } from "@/hooks/use-dropdown-tooltip"
+import type { ModelPricing } from "@/lib/provider-constants"
 import { cn } from "@/lib/utils"
 import { openSettingsWindow, SettingsSection } from "@/lib/window-manager"
 
@@ -21,6 +22,8 @@ interface ModelOption {
   provider: string
   label: string
   api_id: string
+  contextWindow?: number | null
+  pricing?: ModelPricing
 }
 
 interface SelectModelProps extends Omit<React.ComponentProps<typeof Button>, "onChange" | "value"> {
