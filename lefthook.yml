@@ -18,22 +18,22 @@ pre-commit:
     format-frontend:
       tags:
         - frontend
-      glob: "*.{js,ts,html,css,json}"
+      glob: "*.{js,jsx,ts,tsx,html,css,json}"
       run: pnpm -s format:frontend
     check-frontend:
       tags:
         - frontend
-      glob: "*.{js,ts,html,css,json}"
+      glob: "*.{js,jsx,ts,tsx,html,css,json}"
       run: pnpm -s check:frontend
     lint-frontend:
       tags:
         - frontend
-      glob: "*.{js,ts,html,css,json}"
+      glob: "*.{js,jsx,ts,tsx,html,css,json}"
       run: pnpm -s lint:frontend
     test-frontend:
       tags:
         - frontend
-      glob: "*.{js,ts,html,css}"
+      glob: "*.{js,jsx,ts,tsx,html,css}"
       run: pnpm -s test:frontend
     format-backend:
       tags:
