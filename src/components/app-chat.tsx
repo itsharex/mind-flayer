@@ -846,6 +846,10 @@ const AppChatInner = ({
 
       await saveAllMessagesAsync(runtime.chatId, runtime.chat.messages, { isNewChat })
 
+      void runtime.chat.sendMessage().catch(sendError => {
+        console.error("[AppChat] Failed to send message:", sendError)
+      })
+
       // Fire-and-forget: LLM title generation for new chats
       if (isNewChat && messageText) {
         const model = selectedModelRef.current
@@ -857,10 +861,6 @@ const AppChatInner = ({
           })
         }
       }
-
-      void runtime.chat.sendMessage().catch(sendError => {
-        console.error("[AppChat] Failed to send message:", sendError)
-      })
       return userMessageId
     },
     [saveAllMessagesAsync, selectedModelRef, updateChatTitle]

@@ -4,28 +4,47 @@
  *
  * @param globalAbortController - Controller for aborting active requests
  * @param server - HTTP server instance
+ * @param preShutdown - Optional best-effort callback before abort/close
  */
 export function createShutdownHandler(
   globalAbortController: AbortController,
-  server: { close: (callback: () => void) => void }
+  server: { close: (callback: () => void) => void },
+  preShutdown?: () => Promise<void> | void
 ) {
+  let shutdownStarted = false
+
   return () => {
-    console.log("Shutting down gracefully...")
+    if (shutdownStarted) {
+      return
+    }
+    shutdownStarted = true
 
-    // Abort all active AI requests
-    globalAbortController.abort()
-    console.info("[sidecar] All active requests cancelled")
+    void (async () => {
+      console.log("Shutting down gracefully...")
 
-    server.close(() => {
-      console.log("Server closed, port released")
-      process.exit(0)
-    })
+      if (preShutdown) {
+        try {
+          await preShutdown()
+        } catch (error) {
+          console.error("[sidecar] pre-shutdown hook failed:", error)
+        }
+      }
 
-    // Force exit if server doesn't close within 5 seconds
-    setTimeout(() => {
-      console.error("Forced shutdown")
-      process.exit(1)
-    }, 5000)
+      // Abort all active AI requests
+      globalAbortController.abort()
+      console.info("[sidecar] All active requests cancelled")
+
+      server.close(() => {
+        console.log("Server closed, port released")
+        process.exit(0)
+      })
+
+      // Force exit if server doesn't close within 5 seconds
+      setTimeout(() => {
+        console.error("Forced shutdown")
+        process.exit(1)
+      }, 5000)
+    })()
   }
 }
 

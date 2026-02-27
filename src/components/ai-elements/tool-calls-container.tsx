@@ -262,9 +262,7 @@ const ToolCallBashExec = ({
       <ToolCallContent>
         {(part.state === "input-streaming" ||
           part.state === "input-available" ||
-          part.state === "approval-responded") && (
-          <ToolCallInputStreaming description={<BashExecCommandLine input={input} />} />
-        )}
+          part.state === "approval-responded") && <BashExecCommandLine input={input} />}
         {part.state === "approval-requested" && approvalId && (
           <ToolCallApprovalRequested
             description={<BashExecCommandLine input={input} />}

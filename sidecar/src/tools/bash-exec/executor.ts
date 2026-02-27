@@ -27,6 +27,14 @@ const RESTRICTED_PATH = Array.from(
   new Set([...BASE_RESTRICTED_PATH_ENTRIES, dirname(process.execPath)])
 ).join(":")
 
+const GRAPHICS_ENV_KEYS = [
+  "DISPLAY",
+  "WAYLAND_DISPLAY",
+  "XDG_RUNTIME_DIR",
+  "DBUS_SESSION_BUS_ADDRESS",
+  "XAUTHORITY"
+] as const
+
 // Safety constants
 const TIMEOUT_MS = 30000 // 30 seconds
 const MAX_OUTPUT_BYTES = 51200 // 50KB
@@ -99,11 +107,29 @@ async function resolveCommandPath(command: string): Promise<string> {
   }
 }
 
+function buildExecutionEnv(workingDir: string): NodeJS.ProcessEnv {
+  const executionEnv: NodeJS.ProcessEnv = {
+    PATH: RESTRICTED_PATH,
+    LANG: "en_US.UTF-8",
+    HOME: USER_HOME,
+    MIND_FLAYER_SESSION_DIR: workingDir
+  }
+
+  for (const key of GRAPHICS_ENV_KEYS) {
+    const value = process.env[key]
+    if (value !== undefined) {
+      executionEnv[key] = value
+    }
+  }
+
+  return executionEnv
+}
+
 /**
  * Executes a command with arguments in a specified working directory
  * @param cmd - The command to execute
  * @param args - Array of command arguments
- * @param workingDir - Working directory for command execution (sandbox)
+ * @param workingDir - Working directory for command execution (session workspace)
  * @param abortSignal - Signal to abort execution
  * @returns Execution result with stdout, stderr, exit code, and timeout flag
  */
@@ -119,12 +145,7 @@ export async function executeCommand(
   // Expand tilde in all arguments to support paths like ~/Desktop
   const expandedArgs = args.map(expandTilde)
 
-  // Restricted environment to prevent PATH manipulation
-  const restrictedEnv = {
-    PATH: RESTRICTED_PATH,
-    LANG: "en_US.UTF-8",
-    HOME: workingDir // Set HOME to sandbox for safety
-  }
+  const executionEnv = buildExecutionEnv(workingDir)
 
   return new Promise<ExecutionResult>((resolve, reject) => {
     let timedOut = false
@@ -136,7 +157,7 @@ export async function executeCommand(
     const child = spawn(resolvedPath, expandedArgs, {
       cwd: workingDir,
       shell: false, // Critical: no shell to prevent injection
-      env: restrictedEnv
+      env: executionEnv
     })
 
     // Timeout handler

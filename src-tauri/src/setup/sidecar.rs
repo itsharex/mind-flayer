@@ -1,5 +1,6 @@
 use log::{debug, error, info, warn};
 use std::{
+    fs,
     net::TcpListener,
     sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
@@ -19,6 +20,7 @@ const SIDECAR_STDERR_BUFFER_MAX_BYTES: usize = 4 * 1024;
 const SIDECAR_RETRY_DELAY_MS: u64 = 200;
 const SIDECAR_SERVICE_NAME: &str = "mind-flayer-sidecar";
 const SIDECAR_STARTUP_TOKEN_ENV_KEY: &str = "SIDECAR_STARTUP_TOKEN";
+const MINDFLAYER_APP_SUPPORT_DIR_ENV_KEY: &str = "MINDFLAYER_APP_SUPPORT_DIR";
 
 /// State to hold the sidecar process handle
 pub struct SidecarState {
@@ -94,6 +96,22 @@ pub async fn start_sidecar(app: tauri::AppHandle) -> Result<u16, String> {
         (Arc::clone(&state.child), Arc::clone(&state.port))
     };
     start_sidecar_internal(app, child_ref, port_ref).await
+}
+
+fn resolve_sidecar_app_support_dir() -> Result<String, String> {
+    let app_support_dir = dirs::data_local_dir()
+        .ok_or_else(|| "Failed to get local app data directory for sidecar".to_string())?
+        .join("mind-flayer");
+
+    fs::create_dir_all(&app_support_dir).map_err(|e| {
+        format!(
+            "Failed to create sidecar app support directory '{}': {}",
+            app_support_dir.display(),
+            e
+        )
+    })?;
+
+    Ok(app_support_dir.to_string_lossy().to_string())
 }
 
 #[derive(Debug, Clone)]
@@ -452,6 +470,7 @@ async fn start_sidecar_internal(
     clear_sidecar_port(&port_ref);
 
     let mut last_error = String::from("Unknown sidecar startup failure");
+    let app_support_dir = resolve_sidecar_app_support_dir()?;
 
     for attempt in 1..=SIDECAR_START_MAX_ATTEMPTS {
         let use_preferred_port = attempt == 1;
@@ -477,7 +496,8 @@ async fn start_sidecar_internal(
                 err_msg
             })?
             .env("SIDECAR_PORT", port.to_string())
-            .env(SIDECAR_STARTUP_TOKEN_ENV_KEY, startup_token.clone());
+            .env(SIDECAR_STARTUP_TOKEN_ENV_KEY, startup_token.clone())
+            .env(MINDFLAYER_APP_SUPPORT_DIR_ENV_KEY, app_support_dir.clone());
 
         debug!("Sidecar command created for port {}", port);
 

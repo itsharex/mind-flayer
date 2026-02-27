@@ -5,6 +5,7 @@ import { errorHandler } from "./middleware/error-handler"
 import { registerRoutes } from "./routes"
 import { providerService } from "./services/provider-service"
 import { toolService } from "./services/tool-service"
+import { cleanupTransientWorkspaces } from "./tools/bash-exec/workspace"
 import type { ConfigUpdateMessage } from "./type"
 import { createShutdownHandler, setupStdinListener } from "./utils/lifecycle"
 
@@ -61,7 +62,9 @@ setupStdinListener((message: unknown) => {
 })
 
 // Register shutdown handlers
-const shutdown = createShutdownHandler(globalAbortController, server)
+const shutdown = createShutdownHandler(globalAbortController, server, async () => {
+  await cleanupTransientWorkspaces()
+})
 process.on("SIGTERM", shutdown)
 process.on("SIGINT", shutdown)
 process.on("exit", () => {

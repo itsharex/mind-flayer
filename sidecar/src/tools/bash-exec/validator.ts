@@ -47,7 +47,8 @@ export const SAFE_COMMANDS = [
   "vm_stat",
   "jq",
   "uname",
-  "hostname"
+  "hostname",
+  "screencapture" // macOS-specific safe command for taking screenshots
 ] as const
 
 /**

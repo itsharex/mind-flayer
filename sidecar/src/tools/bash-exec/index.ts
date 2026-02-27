@@ -1,6 +1,6 @@
 /**
  * Bash execution tool for Mind Flayer
- * Allows AI agents to execute shell commands in isolated sandbox environments
+ * Allows AI agents to execute shell commands in isolated session workspaces
  */
 
 import { tool } from "ai"
@@ -25,7 +25,7 @@ export class BashExecutionTool implements ITool {
 
 /**
  * Bash execution tool definition factory
- * This tool executes shell commands in an isolated sandbox environment
+ * This tool executes shell commands in isolated session workspaces
  * @param chatId - Chat session ID for workspace isolation
  */
 export const bashExecutionTool = (chatId: string) => {
@@ -34,25 +34,25 @@ export const bashExecutionTool = (chatId: string) => {
 
   if (!chatId) {
     console.warn(
-      "[BashExec] No chatId provided, will use temporary workspace (may not be cleaned up automatically)"
+      "[BashExec] No chatId provided, using a transient session workspace that will be cleaned up on sidecar shutdown"
     )
   }
 
   return tool({
-    description: `Execute shell commands in an isolated sandbox environment (macOS/Linux only; not supported on Windows).
+    description: `Execute shell commands in isolated session workspaces under Application Support (macOS/Linux only; not supported on Windows).
 
 IMPORTANT: Commands are executed using direct process spawn (not shell).
 - Use 'command' field for the executable name (e.g., "ls", "cat", "grep")  
 - Each flag or parameter must be a separate array element (e.g., ["-la"] or ["-l","-a"] NOT ["- la"])
 - Do NOT use shell syntax like pipes (|), redirects (>, <), or command chains (;, &&, ||)
-- Working directory is a temporary sandbox, but args can reference real file paths
+- Working directory is a per-session workspace, HOME is the real user home, and args can reference real file paths
 - Safe commands (ls, cat, grep, etc.) execute immediately
 - Dangerous commands (rm, chmod, etc.) may require user approval
 
 Examples:
   ✅ { command: "ls", args: ["-la", "~/Desktop"] } - List Desktop files
   ✅ { command: "cat", args: ["~/Documents/file.txt"] } - Read real file
-  ✅ { command: "find", args: [".", "-name", "*.ts"] } - Find in sandbox
+  ✅ { command: "find", args: [".", "-name", "*.ts"] } - Find in current session workspace
   ❌ { command: "ls | grep test" } - NO: shell syntax not supported
   ❌ { command: "cat file.txt > output.txt" } - NO: use 'cp' command instead
   ❌ { command: "ls - la" } - NO: flags/args must be separate elements

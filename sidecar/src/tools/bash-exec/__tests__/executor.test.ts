@@ -59,4 +59,54 @@ describeIfSupported("executeCommand", () => {
     expect([0, 1, 2]).toContain(result.exitCode)
     expect(result.stderr).not.toContain("~/Desktop: No such file or directory")
   })
+
+  it("should use the real user HOME in execution environment", async () => {
+    const userHome = homedir()
+    const result = await executeCommand("printenv", ["HOME"], "/tmp", new AbortController().signal)
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout.trim()).toBe(userHome)
+  })
+
+  it("should pass through whitelisted graphical session environment variables", async () => {
+    const previousDisplay = process.env.DISPLAY
+    process.env.DISPLAY = ":mind-flayer-test-display"
+
+    try {
+      const result = await executeCommand(
+        "printenv",
+        ["DISPLAY"],
+        "/tmp",
+        new AbortController().signal
+      )
+
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout.trim()).toBe(":mind-flayer-test-display")
+    } finally {
+      if (previousDisplay === undefined) {
+        delete process.env.DISPLAY
+      } else {
+        process.env.DISPLAY = previousDisplay
+      }
+    }
+  })
+
+  it("should not pass through non-whitelisted environment variables", async () => {
+    const key = "MINDFLAYER_SHOULD_NOT_LEAK"
+    const previousValue = process.env[key]
+    process.env[key] = "super-secret"
+
+    try {
+      const result = await executeCommand("printenv", [key], "/tmp", new AbortController().signal)
+
+      expect(result.exitCode).toBe(1)
+      expect(result.stdout.trim()).toBe("")
+    } finally {
+      if (previousValue === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = previousValue
+      }
+    }
+  })
 })
