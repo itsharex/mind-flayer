@@ -1,14 +1,14 @@
+import { math } from "@streamdown/math"
 import type { FileUIPart, UIMessage } from "ai"
 import { ChevronLeftIcon, ChevronRightIcon, PaperclipIcon, XIcon } from "lucide-react"
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react"
 import { createContext, forwardRef, memo, useContext, useEffect, useState } from "react"
-import remarkBreaks from "remark-breaks"
-import remarkMath from "remark-math"
-import { defaultRemarkPlugins, Streamdown } from "streamdown"
+import { Streamdown } from "streamdown"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import "katex/dist/katex.min.css"
 
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: UIMessage["role"]
@@ -280,14 +280,7 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown>
 export const MessageResponse = memo(
   ({ className, ...props }: MessageResponseProps) => (
     <Streamdown
-      remarkPlugins={[
-        [
-          remarkMath,
-          { singleDollarTextMath: true },
-          ...Object.values(defaultRemarkPlugins),
-          remarkBreaks
-        ]
-      ]}
+      plugins={{ math }}
       className={cn(
         "app-chat",
         "size-full space-y-2.5",

@@ -300,7 +300,9 @@ export type ReasoningPartContentProps = ComponentProps<"div"> & {
 export const ReasoningPartContent = memo(
   ({ className, children, ...props }: ReasoningPartContentProps) => (
     <div className={cn("text-muted-foreground pr-4 text-sm", className)} {...props}>
-      <Streamdown className="streamdown-thinking-process space-y-2.5">{children}</Streamdown>
+      <Streamdown controls={{ table: false }} className="streamdown-thinking-process space-y-2.5">
+        {children}
+      </Streamdown>
     </div>
   )
 )
