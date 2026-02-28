@@ -4,12 +4,44 @@
  */
 
 /**
- * Build time-related system context.
- * Uses date-only format (no time) for better KV cache hit rate.
+ * Build role context for the AI agent.
  *
- * @returns Time context string
+ * @returns Role context string
  */
-function buildTimeContext(): string {
+function buildRoleContext(): string {
+  return "You are Mind Flayer, a local desktop AI agent."
+}
+
+/**
+ * Build response format rules.
+ *
+ * @returns Response format rules string
+ */
+function buildResponseFormatRules(): string {
+  return [
+    "Response format rules:",
+    "- When sharing a local image file (such as a screenshot), always embed it using Markdown image syntax.",
+    "- Use an absolute file URI in the image URL: ![screenshot](file:///absolute/path/to/image.png).",
+    "- Do not reply with only a plain file path for images."
+  ].join("\n")
+}
+
+/**
+ * Build system context including environment and time info.
+ *
+ * @returns System context string
+ */
+function buildSystemContext(): string {
+  const platform = process.platform
+  const osName =
+    platform === "darwin"
+      ? "macOS"
+      : platform === "win32"
+        ? "Windows"
+        : platform === "linux"
+          ? "Linux"
+          : "Unknown"
+
   const now = new Date()
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC"
 
@@ -28,27 +60,13 @@ function buildTimeContext(): string {
   const offsetSign = offsetMinutes >= 0 ? "+" : "-"
   const utcOffset = `UTC${offsetSign}${offsetHours}${offsetMins > 0 ? `:${offsetMins.toString().padStart(2, "0")}` : ""}`
 
-  return [`- current_date: ${localDate}`, `- time_zone: ${tz} (${utcOffset})`].join("\n")
-}
-
-/**
- * Build system environment context.
- * Can be extended with more environment info (OS, version, etc.)
- *
- * @returns Environment context string
- */
-function buildEnvironmentContext(): string {
-  const platform = process.platform
-  const osName =
-    platform === "darwin"
-      ? "macOS"
-      : platform === "win32"
-        ? "Windows"
-        : platform === "linux"
-          ? "Linux"
-          : "Unknown"
-  const lines = [`- os: ${osName}`, `- platform: ${platform}`]
-  return lines.join("\n")
+  return [
+    "System context:",
+    `- os: ${osName}`,
+    `- platform: ${platform}`,
+    `- current_date: ${localDate}`,
+    `- time_zone: ${tz} (${utcOffset})`
+  ].join("\n")
 }
 
 /**
@@ -58,20 +76,5 @@ function buildEnvironmentContext(): string {
  * @returns Complete system prompt
  */
 export function buildSystemPrompt(): string {
-  const responseFormatRules = [
-    "Response format rules:",
-    "- When sharing a local image file (such as a screenshot), always embed it using Markdown image syntax.",
-    "- Use an absolute file URI in the image URL: ![screenshot](file:///absolute/path/to/image.png).",
-    "- Do not reply with only a plain file path for images."
-  ].join("\n")
-
-  const sections = [
-    "You are Mind Flayer, a local desktop AI agent.",
-    "System context:",
-    buildEnvironmentContext(),
-    buildTimeContext(),
-    responseFormatRules
-  ].filter(Boolean)
-
-  return sections.join("\n")
+  return [buildRoleContext(), buildResponseFormatRules(), buildSystemContext()].join("\n")
 }
