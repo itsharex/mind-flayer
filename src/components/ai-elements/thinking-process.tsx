@@ -30,6 +30,10 @@ import {
   isWebSearchToolUIPart
 } from "~/src/lib/tool-helpers"
 
+const THINKING_STREAMDOWN_COMPONENTS = {
+  img: () => null
+}
+
 type ThinkingProcessContextValue = {
   isStreaming: boolean
   isOpen: boolean
@@ -300,7 +304,11 @@ export type ReasoningPartContentProps = ComponentProps<"div"> & {
 export const ReasoningPartContent = memo(
   ({ className, children, ...props }: ReasoningPartContentProps) => (
     <div className={cn("text-muted-foreground pr-4 text-sm", className)} {...props}>
-      <Streamdown controls={{ table: false }} className="streamdown-thinking-process space-y-2.5">
+      <Streamdown
+        controls={{ table: false }}
+        className="streamdown-thinking-process space-y-2.5"
+        components={THINKING_STREAMDOWN_COMPONENTS}
+      >
         {children}
       </Streamdown>
     </div>

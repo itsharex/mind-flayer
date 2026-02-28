@@ -222,6 +222,13 @@ const AppChatInner = ({
   const recalcFrameRef = useRef<number | null>(null)
 
   const { isCompact, open } = useSidebar()
+  const sidecarOrigin = useMemo(() => {
+    try {
+      return new URL(sidecarApi).origin
+    } catch {
+      return undefined
+    }
+  }, [sidecarApi])
 
   const currentDraftKey = getDraftKey(activeChatId)
   const focusTargetKey = activeChatId ?? `new:${newChatToken ?? "default"}`
@@ -1334,7 +1341,9 @@ const AppChatInner = ({
                         {isUserMessage ? (
                           <div className="whitespace-pre-wrap wrap-break-word">{messageText}</div>
                         ) : (
-                          <MessageResponse>{messageText}</MessageResponse>
+                          <MessageResponse localImageProxyOrigin={sidecarOrigin}>
+                            {messageText}
+                          </MessageResponse>
                         )}
                       </MessageContent>
                       {isUserMessage && (

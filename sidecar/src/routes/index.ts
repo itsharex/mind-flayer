@@ -2,6 +2,7 @@ import type { Hono } from "hono"
 import { handleChat } from "./chat"
 import { handleCleanupWorkspace } from "./cleanup"
 import { handleHealth } from "./health"
+import { handleLocalImage } from "./local-image"
 import { handleTitleGenerator } from "./title"
 
 /**
@@ -19,6 +20,9 @@ export function registerRoutes(app: Hono, globalAbortController: AbortController
 
   // Chat title generation endpoint
   app.post("/api/title", handleTitleGenerator)
+
+  // Local image proxy endpoint
+  app.get("/api/local-image", handleLocalImage)
 
   // Workspace cleanup endpoint
   app.post("/api/cleanup-workspace", handleCleanupWorkspace)

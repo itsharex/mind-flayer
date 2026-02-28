@@ -2,8 +2,13 @@ import { math } from "@streamdown/math"
 import type { FileUIPart, UIMessage } from "ai"
 import { ChevronLeftIcon, ChevronRightIcon, PaperclipIcon, XIcon } from "lucide-react"
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react"
-import { createContext, forwardRef, memo, useContext, useEffect, useState } from "react"
+import { createContext, forwardRef, memo, useContext, useEffect, useMemo, useState } from "react"
 import { Streamdown } from "streamdown"
+import {
+  createRewriteLocalImageRemarkPlugin,
+  createStreamdownComponentsWithLocalImage,
+  streamdownRehypePluginsWithLocalImageSrc
+} from "@/components/ai-elements/streamdown-local-image"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -275,32 +280,66 @@ export const MessageBranchPage = ({ className, ...props }: MessageBranchPageProp
   )
 }
 
-export type MessageResponseProps = ComponentProps<typeof Streamdown>
+export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
+  localImageProxyOrigin?: string
+}
 
 export const MessageResponse = memo(
-  ({ className, ...props }: MessageResponseProps) => (
-    <Streamdown
-      plugins={{ math }}
-      className={cn(
-        "app-chat",
-        "size-full space-y-2.5",
-        "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
-        className
-      )}
-      controls={{
-        table: true,
-        code: true,
-        mermaid: {
-          download: true,
-          copy: true,
-          fullscreen: false,
-          panZoom: true
-        }
-      }}
-      {...props}
-    />
-  ),
-  (prevProps, nextProps) => prevProps.children === nextProps.children
+  ({
+    className,
+    components: componentsProp,
+    rehypePlugins,
+    remarkPlugins: remarkPluginsProp,
+    localImageProxyOrigin,
+    ...props
+  }: MessageResponseProps) => {
+    const components = useMemo(
+      () => createStreamdownComponentsWithLocalImage(componentsProp, localImageProxyOrigin),
+      [componentsProp, localImageProxyOrigin]
+    )
+    const remarkPlugins = useMemo(() => {
+      const rewriteLocalImageRemarkPlugin =
+        createRewriteLocalImageRemarkPlugin(localImageProxyOrigin)
+
+      if (!remarkPluginsProp) {
+        return [rewriteLocalImageRemarkPlugin]
+      }
+
+      return [...remarkPluginsProp, rewriteLocalImageRemarkPlugin]
+    }, [remarkPluginsProp, localImageProxyOrigin])
+
+    return (
+      <Streamdown
+        plugins={{ math }}
+        className={cn(
+          "app-chat",
+          "size-full space-y-2.5",
+          "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          className
+        )}
+        controls={{
+          table: true,
+          code: true,
+          mermaid: {
+            download: true,
+            copy: true,
+            fullscreen: false,
+            panZoom: true
+          }
+        }}
+        components={components}
+        rehypePlugins={rehypePlugins ?? streamdownRehypePluginsWithLocalImageSrc}
+        remarkPlugins={remarkPlugins}
+        {...props}
+      />
+    )
+  },
+  (prevProps, nextProps) =>
+    prevProps.children === nextProps.children &&
+    prevProps.localImageProxyOrigin === nextProps.localImageProxyOrigin &&
+    prevProps.components === nextProps.components &&
+    prevProps.remarkPlugins === nextProps.remarkPlugins &&
+    prevProps.rehypePlugins === nextProps.rehypePlugins
 )
 
 MessageResponse.displayName = "MessageResponse"
