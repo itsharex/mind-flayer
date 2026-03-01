@@ -2,9 +2,13 @@ import { createMemoryState } from "@chat-adapter/state-memory"
 import { createTelegramAdapter } from "@chat-adapter/telegram"
 import type { LanguageModel } from "ai"
 import { stepCountIs, streamText, type UIMessage } from "ai"
-import { Chat } from "chat"
+import { Chat, type PostableMessage, type SentMessage } from "chat"
 import { processMessages } from "../utils/message-processor"
 import { buildSystemPrompt } from "../utils/system-prompt-builder"
+import {
+  type TelegramImageUpload,
+  transformTelegramImageMessage
+} from "../utils/telegram-image-message"
 import { buildToolChoice } from "../utils/tool-choice"
 import type { ChannelRuntimeConfigService } from "./channel-runtime-config-service"
 import type { ProviderService } from "./provider-service"
@@ -30,7 +34,7 @@ interface TelegramThread {
   id: string
   isDM?: boolean
   subscribe: () => Promise<void>
-  post: (message: string | AsyncIterable<string>) => Promise<void>
+  post: (message: string | PostableMessage | AsyncIterable<string>) => Promise<SentMessage>
 }
 
 interface TelegramMessage {
@@ -530,7 +534,7 @@ export class TelegramBotService {
         chunkCount += 1
       })
 
-      await this.postToThread(thread, textStream, "assistant_stream")
+      const streamedMessage = await this.postToThread(thread, textStream, "assistant_stream")
 
       const normalizedAssistantText = assistantText.trim()
       if (!normalizedAssistantText) {
@@ -551,9 +555,14 @@ export class TelegramBotService {
         return
       }
 
+      const finalAssistantText = await this.finalizeAssistantMessage(
+        thread,
+        streamedMessage,
+        normalizedAssistantText
+      )
       const updatedMessages = this.trimSessionMessages([
         ...messagesWithLatestInput,
-        this.createTextMessage("assistant", normalizedAssistantText)
+        this.createTextMessage("assistant", finalAssistantText)
       ])
       this.sessionMessages.set(sessionKey, updatedMessages)
 
@@ -561,7 +570,7 @@ export class TelegramBotService {
         threadId: thread.id,
         sessionKey,
         chunkCount,
-        outputChars: normalizedAssistantText.length,
+        outputChars: finalAssistantText.length,
         contextCount: updatedMessages.length
       })
     } catch (error) {
@@ -578,12 +587,97 @@ export class TelegramBotService {
     }
   }
 
+  private async finalizeAssistantMessage(
+    thread: TelegramThread,
+    streamedMessage: SentMessage,
+    normalizedAssistantText: string
+  ): Promise<string> {
+    let transformedText = normalizedAssistantText
+    let uploads: TelegramImageUpload[] = []
+    let warnings: string[] = []
+
+    try {
+      const transformed = await transformTelegramImageMessage(normalizedAssistantText)
+      transformedText = transformed.sanitizedText || normalizedAssistantText
+      uploads = transformed.uploads
+      warnings = transformed.warnings
+    } catch (error) {
+      console.warn("[TelegramBotService] Failed to transform Telegram image markdown:", error)
+    }
+
+    if (warnings.length > 0) {
+      warnings.forEach(warning => {
+        this.logInfo("Telegram image transform warning", {
+          threadId: thread.id,
+          warning
+        })
+      })
+    }
+
+    if (transformedText !== normalizedAssistantText) {
+      try {
+        await streamedMessage.edit(transformedText)
+        this.logInfo("Telegram streamed message edited after local image transform", {
+          threadId: thread.id,
+          uploadCount: uploads.length
+        })
+      } catch (error) {
+        console.warn("[TelegramBotService] Failed to edit streamed Telegram message:", error)
+      }
+    }
+
+    await this.postImageUploads(thread, uploads)
+    return transformedText
+  }
+
+  private async postImageUploads(
+    thread: TelegramThread,
+    uploads: TelegramImageUpload[]
+  ): Promise<void> {
+    if (uploads.length === 0) {
+      return
+    }
+
+    for (const upload of uploads) {
+      try {
+        await this.postToThread(
+          thread,
+          {
+            markdown: upload.caption,
+            files: [
+              {
+                data: upload.data,
+                filename: upload.filename,
+                mimeType: upload.mimeType
+              }
+            ]
+          },
+          "assistant_image_upload"
+        )
+      } catch (error) {
+        console.warn("[TelegramBotService] Failed to upload Telegram image:", error)
+      }
+    }
+  }
+
+  private resolvePayloadMode(payload: string | PostableMessage | AsyncIterable<string>): string {
+    if (typeof payload === "string") {
+      return "text"
+    }
+
+    if (payload && typeof payload === "object" && Symbol.asyncIterator in payload) {
+      return "stream"
+    }
+
+    return "postable"
+  }
+
   private async postToThread(
     thread: TelegramThread,
-    payload: string | AsyncIterable<string>,
+    payload: string | PostableMessage | AsyncIterable<string>,
     context: string
-  ): Promise<void> {
-    const mode = typeof payload === "string" ? "text" : "stream"
+  ): Promise<SentMessage> {
+    const mode = this.resolvePayloadMode(payload)
     this.logInfo("Telegram send start", {
       threadId: thread.id,
       context,
@@ -592,12 +686,13 @@ export class TelegramBotService {
     })
 
     try {
-      await thread.post(payload)
+      const sentMessage = await thread.post(payload)
       this.logInfo("Telegram send success", {
         threadId: thread.id,
         context,
         mode
       })
+      return sentMessage
     } catch (error) {
       console.error("[TelegramBotService] Telegram send failed:", error)
       this.logInfo("Telegram send failed", {
