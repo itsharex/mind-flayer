@@ -21,10 +21,17 @@ describe("Command Validator", () => {
       }
     })
 
-    it("should require approval for commands outside safe and blocked lists", () => {
+    it("should require approval for commands outside safe and blocked lists (desktop)", () => {
       const result = validateCommand("kubectl")
       expect(result.isAllowed).toBe(true)
       expect(result.requiresApproval).toBe(true)
+      expect(result.reason).toBeUndefined()
+    })
+
+    it("should auto-allow commands outside safe and blocked lists for channel source", () => {
+      const result = validateCommand("kubectl", [], "channel")
+      expect(result.isAllowed).toBe(true)
+      expect(result.requiresApproval).toBe(false)
       expect(result.reason).toBeUndefined()
     })
 
@@ -40,10 +47,16 @@ describe("Command Validator", () => {
       expect(result.requiresApproval).toBe(false)
     })
 
-    it("should require approval for non-safe command extracted from path", () => {
+    it("should require approval for non-safe command extracted from path (desktop)", () => {
       const result = validateCommand("/usr/bin/python3")
       expect(result.isAllowed).toBe(true)
       expect(result.requiresApproval).toBe(true)
+    })
+
+    it("should auto-allow non-safe command extracted from path for channel source", () => {
+      const result = validateCommand("/usr/bin/python3", [], "channel")
+      expect(result.isAllowed).toBe(true)
+      expect(result.requiresApproval).toBe(false)
     })
 
     it("should block rm with critical root target", () => {
@@ -53,10 +66,16 @@ describe("Command Validator", () => {
       expect(result.reason).toContain("Blocking dangerous rm target")
     })
 
-    it("should require approval for rm on non-critical targets", () => {
+    it("should require approval for rm on non-critical targets (desktop)", () => {
       const result = validateCommand("rm", ["-rf", "./tmp"])
       expect(result.isAllowed).toBe(true)
       expect(result.requiresApproval).toBe(true)
+    })
+
+    it("should auto-allow rm on non-critical targets for channel source", () => {
+      const result = validateCommand("rm", ["-rf", "./tmp"], "channel")
+      expect(result.isAllowed).toBe(true)
+      expect(result.requiresApproval).toBe(false)
     })
 
     it("should block dd writes to device paths", () => {

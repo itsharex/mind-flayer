@@ -38,8 +38,9 @@ export class ToolService {
     useWebSearch: boolean
     chatId?: string
     includeBashExecution?: boolean
+    source?: "channel" | "desktop"
   }): AllTools {
-    const { useWebSearch, chatId, includeBashExecution = true } = options
+    const { useWebSearch, chatId, includeBashExecution = true, source = "desktop" } = options
     const tools: AllTools = {}
 
     // Add web search tool if enabled
@@ -61,7 +62,10 @@ export class ToolService {
     if (includeBashExecution && isBashExecSupportedPlatform()) {
       const toolPlugin = toolRegistry.get("bashExecution")
       const effectiveChatId = chatId || ""
-      const bashInstance = toolPlugin.createInstance(effectiveChatId) as AllTools["bashExecution"]
+      const bashInstance = toolPlugin.createInstance(
+        effectiveChatId,
+        source
+      ) as AllTools["bashExecution"]
       tools.bashExecution = bashInstance
     }
 

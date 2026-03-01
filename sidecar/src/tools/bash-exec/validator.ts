@@ -50,6 +50,8 @@ export const SAFE_COMMANDS = [
   "stat",
   "strings",
   "tail",
+  "tee",
+  "touch",
   "tr",
   "tree",
   "uname",
@@ -153,6 +155,8 @@ function getDangerousArgsReason(command: string, args: string[]): string | null 
   return null
 }
 
+export type CommandSource = "channel" | "desktop"
+
 export interface ValidationResult {
   isAllowed: boolean
   requiresApproval: boolean
@@ -163,9 +167,14 @@ export interface ValidationResult {
  * Validates a command against safe and blocked lists with additional argument checks
  * @param command - The command to validate (should be bare name like 'ls', not path)
  * @param args - Command arguments used for parameter-level blocking checks
+ * @param source - Where the command originates: "channel" (e.g. Telegram) auto-allows, "desktop" requires approval
  * @returns Validation result with approval requirement
  */
-export function validateCommand(command: string, args: string[] = []): ValidationResult {
+export function validateCommand(
+  command: string,
+  args: string[] = [],
+  source: CommandSource = "desktop"
+): ValidationResult {
   // Remove any path component to get bare command name
   const bareCommand = command.split("/").pop() || command
 
@@ -196,9 +205,9 @@ export function validateCommand(command: string, args: string[] = []): Validatio
     }
   }
 
-  // All non-safe and non-blocked commands require user approval
+  // Channel sources (e.g. Telegram) auto-allow; desktop requires user approval
   return {
     isAllowed: true,
-    requiresApproval: true
+    requiresApproval: source === "desktop"
   }
 }

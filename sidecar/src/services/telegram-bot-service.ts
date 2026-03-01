@@ -497,7 +497,8 @@ export class TelegramBotService {
       const tools = this.toolService.getRequestTools({
         useWebSearch: true,
         chatId: this.toSafeToolSessionId(sessionKey),
-        includeBashExecution: true
+        includeBashExecution: true,
+        source: "channel"
       })
       const toolChoice = buildToolChoice({
         useWebSearch: true,

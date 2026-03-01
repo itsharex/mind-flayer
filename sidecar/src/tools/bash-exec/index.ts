@@ -8,7 +8,7 @@ import { z } from "zod"
 import type { ITool } from "../base-tool"
 import { executeCommand } from "./executor"
 import { assertPlatformSupported } from "./platform"
-import { validateCommand } from "./validator"
+import { type CommandSource, validateCommand } from "./validator"
 import { ensureChatWorkspace } from "./workspace"
 
 /**
@@ -18,8 +18,8 @@ import { ensureChatWorkspace } from "./workspace"
 export class BashExecutionTool implements ITool {
   readonly name = "bashExecution"
 
-  createInstance(chatId: string) {
-    return bashExecutionTool(chatId)
+  createInstance(chatId: string, source?: CommandSource) {
+    return bashExecutionTool(chatId, source)
   }
 }
 
@@ -28,7 +28,7 @@ export class BashExecutionTool implements ITool {
  * This tool executes shell commands in isolated session workspaces
  * @param chatId - Chat session ID for workspace isolation
  */
-export const bashExecutionTool = (chatId: string) => {
+export const bashExecutionTool = (chatId: string, source: CommandSource = "desktop") => {
   // Check platform support on tool creation
   assertPlatformSupported()
 
@@ -100,7 +100,7 @@ Do not return only the plain path.`,
 
     needsApproval: input => {
       const { command, args } = input
-      const validation = validateCommand(command, args)
+      const validation = validateCommand(command, args, source)
 
       if (!validation.isAllowed) {
         console.info(`[BashExec] Command '${command}' is blocked by policy`)
@@ -117,7 +117,7 @@ Do not return only the plain path.`,
       console.log(`[BashExec] Executing command: ${command} ${args.join(" ")}`)
 
       // Validate command
-      const validation = validateCommand(command, args)
+      const validation = validateCommand(command, args, source)
       if (!validation.isAllowed) {
         throw new Error(validation.reason || `Command '${command}' is not allowed for execution`)
       }
