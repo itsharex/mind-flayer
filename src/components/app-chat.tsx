@@ -68,7 +68,7 @@ import {
 } from "@/components/ai-elements/tool-calls-container"
 import { SelectModel } from "@/components/select-model"
 import { ToolButton } from "@/components/tool-button"
-import { useSidebar } from "@/components/ui/sidebar"
+import { TopFloatingHeader } from "@/components/top-floating-header"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAvailableModels } from "@/hooks/use-available-models"
 import { useLatest } from "@/hooks/use-latest"
@@ -90,6 +90,8 @@ interface AppChatProps {
   activeChatId?: ChatId | null
   chats: StoredChat[]
   newChatToken: string | null
+  draftStore: Map<string, string>
+  isDesktopChatPaneActive?: () => boolean
   createChat: (title?: string, options?: { activate?: boolean }) => Promise<ChatId>
   loadMessages: (chatId: ChatId) => Promise<UIMessage[]>
   saveChatAllMessages: (chatId: ChatId, messages: UIMessage[], isNewChat?: boolean) => Promise<void>
@@ -168,6 +170,8 @@ const AppChatInner = ({
   activeChatId,
   chats,
   newChatToken,
+  draftStore,
+  isDesktopChatPaneActive,
   createChat,
   loadMessages,
   saveChatAllMessages,
@@ -210,7 +214,7 @@ const AppChatInner = ({
 
   const sessionRuntimesRef = useRef<Map<ChatId, SessionRuntime>>(new Map())
   const pendingChatByTokenRef = useRef<Map<string, Promise<ChatId>>>(new Map())
-  const draftByKeyRef = useRef<Map<string, string>>(new Map())
+  const draftByKeyRef = useRef<Map<string, string>>(draftStore)
   const hydrationRequestSeqRef = useRef<Map<ChatId, number>>(new Map())
   const draftChatRef = useRef(new AiChat<UIMessage>({ id: "draft-chat-view", messages: [] }))
   const messageNodeByIdRef = useRef<Map<MessageId, HTMLDivElement>>(new Map())
@@ -224,7 +228,6 @@ const AppChatInner = ({
   const pendingPinTimeoutRef = useRef<number | null>(null)
   const recalcFrameRef = useRef<number | null>(null)
 
-  const { isCompact, open } = useSidebar()
   const sidecarOrigin = useMemo(() => {
     try {
       return new URL(sidecarApi).origin
@@ -623,31 +626,34 @@ const AppChatInner = ({
           }),
           sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
           onFinish: ({ messages, isAbort, isDisconnect, isError }) => {
-            if (isError) {
-              return
-            }
-
             void (async () => {
               try {
-                await saveAllMessagesAsync(chatId, messages, { isAbort, isDisconnect, isError })
+                if (!isError) {
+                  await saveAllMessagesAsync(chatId, messages, { isAbort, isDisconnect, isError })
 
-                const lastMessage = messages.at(-1)
-                const shouldMarkUnread =
-                  !isAbort &&
-                  !isDisconnect &&
-                  !isError &&
-                  lastMessage?.role === "assistant" &&
-                  activeChatIdRef.current !== chatId
+                  const lastMessage = messages.at(-1)
+                  const shouldMarkUnread =
+                    !isAbort &&
+                    !isDisconnect &&
+                    !isError &&
+                    lastMessage?.role === "assistant" &&
+                    (!(isDesktopChatPaneActive?.() ?? true) || activeChatIdRef.current !== chatId)
 
-                if (shouldMarkUnread) {
-                  onChatUnread?.(chatId)
+                  if (shouldMarkUnread) {
+                    onChatUnread?.(chatId)
+                  }
                 }
               } catch (error) {
                 console.error("[AppChat] Failed to persist finished messages:", error)
+              } finally {
+                onChatReplyingChange?.(chatId, false)
               }
             })()
           },
-          onError: showChatErrorToast
+          onError: error => {
+            onChatReplyingChange?.(chatId, false)
+            showChatErrorToast(error)
+          }
         })
       }
 
@@ -754,10 +760,7 @@ const AppChatInner = ({
       runtime.cleanup = () => {
         unsubscribeMessages()
         unsubscribeStatus()
-        if (prevIsReplying) {
-          prevIsReplying = false
-          onChatReplyingChange?.(chatId, false)
-        }
+        prevIsReplying = false
         thinkingStartTimes.clear()
         toolStartTimes.clear()
         prevToolStates.clear()
@@ -771,6 +774,7 @@ const AppChatInner = ({
       showChatErrorToast,
       onChatUnread,
       onChatReplyingChange,
+      isDesktopChatPaneActive,
       sidecarApi,
       useWebSearchRef,
       webSearchModeRef
@@ -886,8 +890,10 @@ const AppChatInner = ({
       ])
 
       await saveAllMessagesAsync(runtime.chatId, runtime.chat.messages, { isNewChat })
+      onChatReplyingChange?.(runtime.chatId, true)
 
       void runtime.chat.sendMessage().catch(sendError => {
+        onChatReplyingChange?.(runtime.chatId, false)
         console.error("[AppChat] Failed to send message:", sendError)
       })
 
@@ -904,7 +910,7 @@ const AppChatInner = ({
       }
       return userMessageId
     },
-    [saveAllMessagesAsync, selectedModelRef, updateChatTitle]
+    [onChatReplyingChange, saveAllMessagesAsync, selectedModelRef, updateChatTitle]
   )
 
   useLayoutEffect(() => {
@@ -1238,20 +1244,12 @@ const AppChatInner = ({
   return (
     <div className="flex h-full flex-col">
       {/* Top */}
-      <div className="bg-background flex h-11 items-center border-b-[0.5px] pt-0">
-        <div
-          className={cn(
-            "fixed left-10 flex z-50 items-center justify-center pointer-events-auto gap-1.25",
-            !isCompact && open ? "left-66.75" : "left-43",
-            "transition-left duration-300 ease"
-          )}
-        >
-          <SelectModel
-            value={selectedModel ?? undefined}
-            onChange={model => setSelectedModelApiId(model.api_id)}
-          />
-        </div>
-      </div>
+      <TopFloatingHeader contentClassName="justify-center gap-1.25">
+        <SelectModel
+          value={selectedModel ?? undefined}
+          onChange={model => setSelectedModelApiId(model.api_id)}
+        />
+      </TopFloatingHeader>
 
       {/* Middle */}
       <div className="flex-1 min-h-0">
@@ -1570,6 +1568,8 @@ const AppChat = ({
   activeChatId,
   chats,
   newChatToken,
+  draftStore,
+  isDesktopChatPaneActive,
   createChat,
   loadMessages,
   saveChatAllMessages,
@@ -1629,6 +1629,8 @@ const AppChat = ({
       activeChatId={activeChatId}
       chats={chats}
       newChatToken={newChatToken}
+      draftStore={draftStore}
+      isDesktopChatPaneActive={isDesktopChatPaneActive}
       createChat={createChat}
       loadMessages={loadMessages}
       saveChatAllMessages={saveChatAllMessages}

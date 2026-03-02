@@ -1,6 +1,7 @@
 import type * as React from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { NavChannelDebug } from "@/components/nav-channel-debug"
 import { NavChats } from "@/components/nav-chats"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -16,6 +17,9 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   unreadChatIds?: ReadonlySet<ChatId>
   replyingChatIds?: ReadonlySet<ChatId>
   onNewChat?: () => void
+  isTelegramChannelEnabled?: boolean
+  isTelegramDebugActive?: boolean
+  onTelegramDebugClick?: () => void
 }
 
 export function AppSidebar({
@@ -26,6 +30,9 @@ export function AppSidebar({
   onChatClick,
   onNewChat,
   onDeleteChat,
+  isTelegramChannelEnabled = false,
+  isTelegramDebugActive = false,
+  onTelegramDebugClick,
   ...props
 }: AppSidebarProps) {
   const { t } = useTranslation("common")
@@ -47,6 +54,9 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <NavMain onNewChat={onNewChat} />
+        {isTelegramChannelEnabled && onTelegramDebugClick && (
+          <NavChannelDebug isActive={isTelegramDebugActive} onClick={onTelegramDebugClick} />
+        )}
         <NavChats
           chats={chats}
           activeChatId={activeChatId}

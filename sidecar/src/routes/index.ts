@@ -3,6 +3,10 @@ import type { ChannelRuntimeConfigService } from "../services/channel-runtime-co
 import type { ProviderService } from "../services/provider-service"
 import type { TelegramBotService } from "../services/telegram-bot-service"
 import { handleChannelRuntimeConfig } from "./channel-runtime-config"
+import {
+  handleTelegramChannelSessionMessages,
+  handleTelegramChannelSessions
+} from "./channel-telegram-sessions"
 import { handleTelegramChannelTest } from "./channel-telegram-test"
 import { handleChat } from "./chat"
 import { handleCleanupWorkspace } from "./cleanup"
@@ -45,4 +49,12 @@ export function registerRoutes(
 
   // Telegram test endpoint (connectivity + token check)
   app.post("/api/channels/telegram/test", c => handleTelegramChannelTest(c, providerService))
+
+  // Telegram channel session debug endpoints
+  app.get("/api/channels/telegram/sessions", c =>
+    handleTelegramChannelSessions(c, telegramBotService)
+  )
+  app.get("/api/channels/telegram/session-messages", c =>
+    handleTelegramChannelSessionMessages(c, telegramBotService)
+  )
 }

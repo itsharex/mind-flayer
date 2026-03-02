@@ -1,6 +1,7 @@
 {
   "nav": {
     "newChat": "New Chat",
+    "channelSessions": "Channel Sessions",
     "recentChats": "Recent Chats",
     "noChatsYet": "No chats yet. Start a new chat!",
     "showMore": "Show more",
@@ -41,5 +42,22 @@
   "footer": {
     "github": "Github",
     "copyrightWithLink": "AI-generated content, for reference only."
+  },
+  "channelDebug": {
+    "title": "Telegram Session Logs",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing",
+    "refreshFailed": "Failed to refresh Telegram sessions.",
+    "neverUpdated": "Not refreshed yet",
+    "lastUpdated": "Updated at {{time}}",
+    "noSessionsSidebar": "No Telegram sessions.",
+    "threadId": "Thread {{threadId}}",
+    "messageCount": "{{count}} msgs",
+    "noPreview": "No preview",
+    "noSessionsTitle": "No Telegram sessions",
+    "noSessionsDescription": "Send a Telegram message to this bot and logs will appear here.",
+    "noMessagesTitle": "No messages in this session",
+    "noMessagesDescription": "Messages for the selected session will appear here.",
+    "nonTextPlaceholder": "[non-text message]"
   }
 }

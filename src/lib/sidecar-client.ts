@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core"
+import type { UIMessage } from "ai"
 
 const DEFAULT_WAIT_TIMEOUT_MS = 15_000
 
@@ -106,6 +107,85 @@ export async function testTelegramConnection(): Promise<TelegramConnectionTestRe
   return {
     baseUrl: payload.baseUrl,
     bot: payload.bot
+  }
+}
+
+export interface TelegramChannelSessionSummary {
+  sessionKey: string
+  threadId: string
+  updatedAt: number
+  messageCount: number
+  lastMessageRole: UIMessage["role"] | null
+  lastMessagePreview: string
+}
+
+export interface TelegramChannelSessionsResult {
+  sessions: TelegramChannelSessionSummary[]
+}
+
+export async function getTelegramChannelSessions(): Promise<TelegramChannelSessionsResult> {
+  const url = await getSidecarUrl("/api/channels/telegram/sessions")
+  const response = await fetch(url, {
+    method: "GET"
+  })
+
+  if (!response.ok) {
+    let details = ""
+    try {
+      const data = (await response.json()) as { error?: string }
+      details = data.error || ""
+    } catch {
+      details = await response.text()
+    }
+    throw new Error(details || `Telegram sessions request failed (${response.status})`)
+  }
+
+  const payload = (await response.json()) as {
+    success: boolean
+    sessions: TelegramChannelSessionSummary[]
+  }
+
+  return {
+    sessions: payload.sessions ?? []
+  }
+}
+
+export interface TelegramChannelSessionMessagesResult {
+  sessionKey: string
+  messages: UIMessage[]
+}
+
+export async function getTelegramChannelSessionMessages(
+  sessionKey: string
+): Promise<TelegramChannelSessionMessagesResult> {
+  const encodedSessionKey = encodeURIComponent(sessionKey)
+  const url = await getSidecarUrl(
+    `/api/channels/telegram/session-messages?sessionKey=${encodedSessionKey}`
+  )
+  const response = await fetch(url, {
+    method: "GET"
+  })
+
+  if (!response.ok) {
+    let details = ""
+    try {
+      const data = (await response.json()) as { error?: string }
+      details = data.error || ""
+    } catch {
+      details = await response.text()
+    }
+    throw new Error(details || `Telegram session messages request failed (${response.status})`)
+  }
+
+  const payload = (await response.json()) as {
+    success: boolean
+    sessionKey: string
+    messages: UIMessage[]
+  }
+
+  return {
+    sessionKey: payload.sessionKey,
+    messages: payload.messages ?? []
   }
 }
 

@@ -205,4 +205,82 @@ describe("TelegramBotService local image handling", () => {
 
     await rm(tempDir, { recursive: true, force: true })
   })
+
+  it("exposes session summaries and cloned session messages for debug routes", async () => {
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({}))
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+    const channelRuntimeConfigService = {
+      getSelectedModel: vi.fn(() => ({ provider: "minimax", modelId: "abab6.5s-chat" }))
+    }
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      channelRuntimeConfigService as never
+    )
+
+    const postMock = vi.fn(async (payload: unknown) => {
+      if (payload && typeof payload === "object" && Symbol.asyncIterator in payload) {
+        for await (const _chunk of payload as AsyncIterable<string>) {
+          // consume stream chunks
+        }
+      }
+      return { edit: vi.fn(async () => ({})) }
+    })
+
+    streamTextMock.mockReturnValue({
+      textStream: createTextStream("Assistant reply")
+    })
+
+    const thread = {
+      id: "chat-3",
+      post: postMock,
+      subscribe: vi.fn(async () => {})
+    }
+
+    await (
+      service as unknown as {
+        handleIncomingMessage: (thread: unknown, message: unknown) => Promise<void>
+      }
+    ).handleIncomingMessage(thread, {
+      text: "Hello",
+      author: { isMe: false }
+    })
+
+    const sessions = service.listSessions()
+    expect(sessions).toHaveLength(1)
+    expect(sessions[0]?.sessionKey).toBe("telegram:chat-3")
+    expect(sessions[0]?.threadId).toBe("chat-3")
+    expect(sessions[0]?.messageCount).toBe(2)
+    expect(sessions[0]?.lastMessageRole).toBe("assistant")
+    expect(sessions[0]?.lastMessagePreview).toBe("Assistant reply")
+    expect((sessions[0]?.updatedAt ?? 0) > 0).toBe(true)
+
+    const firstRead = service.getSessionMessages("telegram:chat-3")
+    expect(firstRead).toHaveLength(2)
+    expect(firstRead?.[0]?.role).toBe("user")
+
+    if (!firstRead) {
+      throw new Error("Expected firstRead to be non-null")
+    }
+
+    const firstMessage = firstRead[0]
+    if (!firstMessage) {
+      throw new Error("Expected first message to exist")
+    }
+
+    firstRead[0] = {
+      ...firstMessage,
+      id: "mutated-id"
+    }
+
+    const secondRead = service.getSessionMessages("telegram:chat-3")
+    expect(secondRead?.[0]?.id).not.toBe("mutated-id")
+    expect(service.getSessionMessages("telegram:missing")).toBeNull()
+  })
 })

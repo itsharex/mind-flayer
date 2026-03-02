@@ -45,6 +45,15 @@ interface TelegramMessage {
   }
 }
 
+export interface TelegramSessionSummary {
+  sessionKey: string
+  threadId: string
+  updatedAt: number
+  messageCount: number
+  lastMessageRole: UIMessage["role"] | null
+  lastMessagePreview: string
+}
+
 /**
  * Orchestrates Telegram adapter lifecycle and long polling.
  * Runs only when channel is enabled, token exists, and selected model is set.
@@ -56,6 +65,7 @@ export class TelegramBotService {
   private runtimeSignature: string | null = null
   private refreshChain: Promise<void> = Promise.resolve()
   private sessionMessages = new Map<string, UIMessage[]>()
+  private sessionUpdatedAt = new Map<string, number>()
 
   constructor(
     private readonly providerService: ProviderService,
@@ -77,6 +87,38 @@ export class TelegramBotService {
 
   async stop(): Promise<void> {
     await this.stopRuntime("service shutdown")
+  }
+
+  listSessions(): TelegramSessionSummary[] {
+    const summaries: TelegramSessionSummary[] = []
+
+    for (const [sessionKey, messages] of this.sessionMessages.entries()) {
+      const threadId = this.extractThreadIdFromSessionKey(sessionKey)
+      const updatedAt = this.sessionUpdatedAt.get(sessionKey) ?? 0
+      const lastMessage = messages[messages.length - 1]
+      const lastMessageText = this.extractMessageText(lastMessage)
+
+      summaries.push({
+        sessionKey,
+        threadId,
+        updatedAt,
+        messageCount: messages.length,
+        lastMessageRole: lastMessage?.role ?? null,
+        lastMessagePreview: this.toTextPreview(lastMessageText)
+      })
+    }
+
+    summaries.sort((a, b) => b.updatedAt - a.updatedAt)
+    return summaries
+  }
+
+  getSessionMessages(sessionKey: string): UIMessage[] | null {
+    const messages = this.sessionMessages.get(sessionKey)
+    if (!messages) {
+      return null
+    }
+
+    return JSON.parse(JSON.stringify(messages)) as UIMessage[]
   }
 
   private async refreshInternal(): Promise<void> {
@@ -486,7 +528,7 @@ export class TelegramBotService {
       ...history,
       this.createTextMessage("user", text)
     ])
-    this.sessionMessages.set(sessionKey, messagesWithLatestInput)
+    this.setSessionMessages(sessionKey, messagesWithLatestInput)
 
     this.logInfo("Prepared session context", {
       threadId: thread.id,
@@ -545,7 +587,7 @@ export class TelegramBotService {
           chunkCount
         })
         await this.postToThread(thread, fallbackText, "assistant_empty_fallback")
-        this.sessionMessages.set(
+        this.setSessionMessages(
           sessionKey,
           this.trimSessionMessages([
             ...messagesWithLatestInput,
@@ -564,7 +606,7 @@ export class TelegramBotService {
         ...messagesWithLatestInput,
         this.createTextMessage("assistant", finalAssistantText)
       ])
-      this.sessionMessages.set(sessionKey, updatedMessages)
+      this.setSessionMessages(sessionKey, updatedMessages)
 
       this.logInfo("Assistant response stored", {
         threadId: thread.id,
@@ -743,6 +785,26 @@ export class TelegramBotService {
       .slice(0, 120)
 
     return normalized || "telegram_session"
+  }
+
+  private setSessionMessages(sessionKey: string, messages: UIMessage[]): void {
+    this.sessionMessages.set(sessionKey, messages)
+    this.sessionUpdatedAt.set(sessionKey, Date.now())
+  }
+
+  private extractThreadIdFromSessionKey(sessionKey: string): string {
+    return sessionKey.startsWith("telegram:") ? sessionKey.slice("telegram:".length) : sessionKey
+  }
+
+  private extractMessageText(message: UIMessage | undefined): string {
+    if (!message?.parts || message.parts.length === 0) {
+      return ""
+    }
+
+    return message.parts
+      .filter(part => part.type === "text")
+      .map(part => part.text)
+      .join(" ")
   }
 
   private extractUpdateId(update: unknown): number | null {

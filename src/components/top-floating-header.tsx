@@ -1,0 +1,52 @@
+import type { ReactNode } from "react"
+import { useSidebar } from "@/components/ui/sidebar"
+import { cn } from "@/lib/utils"
+
+interface TopFloatingHeaderProps {
+  children: ReactNode
+  className?: string
+  contentClassName?: string
+  rightSlot?: ReactNode
+  rightSlotClassName?: string
+}
+
+export function TopFloatingHeader({
+  children,
+  className,
+  contentClassName,
+  rightSlot,
+  rightSlotClassName
+}: TopFloatingHeaderProps) {
+  const { isCompact, open } = useSidebar()
+
+  return (
+    <div
+      className={cn(
+        "bg-background relative flex h-11 items-center border-b-[0.5px] pt-0",
+        className
+      )}
+    >
+      <div
+        className={cn(
+          "fixed left-10 z-50 flex items-center pointer-events-auto",
+          !isCompact && open ? "left-66.75" : "left-43",
+          "transition-left duration-300 ease",
+          contentClassName
+        )}
+      >
+        {children}
+      </div>
+
+      {rightSlot && (
+        <div
+          className={cn(
+            "absolute top-1/2 right-4 z-50 flex -translate-y-1/2 items-center pointer-events-auto",
+            rightSlotClassName
+          )}
+        >
+          {rightSlot}
+        </div>
+      )}
+    </div>
+  )
+}

@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { AppChat } from "@/components/app-chat"
 import { AppSidebar } from "@/components/app-sidebar"
+import { ChannelTelegramDebug } from "@/components/channel-telegram-debug"
 import { NewChatTrigger } from "@/components/nav-top"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { useChatStorage } from "@/hooks/use-chat-storage"
 import { useLocalShortcut } from "@/hooks/use-local-shortcut"
+import { useSetting } from "@/hooks/use-settings-store"
 import { openSettingsWindow, SettingsSection } from "@/lib/window-manager"
 import type { ChatId } from "@/types/chat"
 import { ShortcutAction } from "@/types/settings"
@@ -16,6 +18,7 @@ const handleOpenSettings = () => {
 }
 
 const createNewChatToken = () => globalThis.crypto.randomUUID()
+type ActivePane = "desktop-chat" | "telegram-debug"
 
 export default function Page() {
   const {
@@ -29,8 +32,13 @@ export default function Page() {
     updateChatTitle
   } = useChatStorage()
   const [newChatToken, setNewChatToken] = useState(createNewChatToken)
+  const [activePane, setActivePane] = useState<ActivePane>("desktop-chat")
   const [unreadChatIds, setUnreadChatIds] = useState<Set<ChatId>>(new Set())
   const [replyingChatIds, setReplyingChatIds] = useState<Set<ChatId>>(new Set())
+  const [enabledChannels] = useSetting("enabledChannels")
+  const sidebarActiveChatId = activePane === "desktop-chat" ? activeChatId : null
+  const draftStoreRef = useRef<Map<string, string>>(new Map())
+  const activePaneRef = useRef<ActivePane>(activePane)
   const activeChatIdRef = useRef(activeChatId)
   const newChatTokenRef = useRef(newChatToken)
 
@@ -42,13 +50,19 @@ export default function Page() {
     newChatTokenRef.current = newChatToken
   }, [newChatToken])
 
+  useEffect(() => {
+    activePaneRef.current = activePane
+  }, [activePane])
+
   const handleNewChat = useCallback(() => {
+    setActivePane("desktop-chat")
     switchChat(null)
     setNewChatToken(createNewChatToken())
   }, [switchChat])
 
   const handleChatClick = useCallback(
     (chatId: ChatId) => {
+      setActivePane("desktop-chat")
       setUnreadChatIds(prev => {
         if (!prev.has(chatId)) {
           return prev
@@ -61,6 +75,14 @@ export default function Page() {
     },
     [switchChat]
   )
+
+  const handleOpenTelegramDebug = useCallback(() => {
+    setActivePane("telegram-debug")
+  }, [])
+
+  const isDesktopChatPaneActive = useCallback(() => {
+    return activePaneRef.current === "desktop-chat"
+  }, [])
 
   const handleChatUnread = useCallback((chatId: ChatId) => {
     setUnreadChatIds(prev => {
@@ -104,7 +126,7 @@ export default function Page() {
   )
 
   useEffect(() => {
-    if (!activeChatId) {
+    if (!activeChatId || activePane !== "desktop-chat") {
       return
     }
     setUnreadChatIds(prev => {
@@ -115,7 +137,15 @@ export default function Page() {
       next.delete(activeChatId)
       return next
     })
-  }, [activeChatId])
+  }, [activeChatId, activePane])
+
+  useEffect(() => {
+    if ((enabledChannels.telegram ?? false) || activePane !== "telegram-debug") {
+      return
+    }
+
+    setActivePane("desktop-chat")
+  }, [activePane, enabledChannels.telegram])
 
   useEffect(() => {
     const chatIds = new Set(chats.map(chat => chat.id))
@@ -162,12 +192,15 @@ export default function Page() {
       {/* Left sidebar */}
       <AppSidebar
         chats={chats}
-        activeChatId={activeChatId}
+        activeChatId={sidebarActiveChatId}
         unreadChatIds={unreadChatIds}
         replyingChatIds={replyingChatIds}
         onChatClick={handleChatClick}
         onDeleteChat={deleteChat}
         onNewChat={handleNewChat}
+        isTelegramChannelEnabled={enabledChannels.telegram ?? false}
+        isTelegramDebugActive={activePane === "telegram-debug"}
+        onTelegramDebugClick={handleOpenTelegramDebug}
       />
 
       {/* Top drag region */}
@@ -184,18 +217,24 @@ export default function Page() {
 
       {/* Main content area */}
       <SidebarInset className="overflow-hidden">
-        <AppChat
-          activeChatId={activeChatId}
-          chats={chats}
-          newChatToken={newChatToken}
-          createChat={createChat}
-          loadMessages={loadMessages}
-          saveChatAllMessages={saveChatAllMessages}
-          updateChatTitle={updateChatTitle}
-          onRequestActivateChat={handleRequestActivateChat}
-          onChatUnread={handleChatUnread}
-          onChatReplyingChange={handleChatReplyingChange}
-        />
+        {activePane === "telegram-debug" ? (
+          <ChannelTelegramDebug />
+        ) : (
+          <AppChat
+            activeChatId={activeChatId}
+            chats={chats}
+            newChatToken={newChatToken}
+            createChat={createChat}
+            loadMessages={loadMessages}
+            saveChatAllMessages={saveChatAllMessages}
+            updateChatTitle={updateChatTitle}
+            draftStore={draftStoreRef.current}
+            isDesktopChatPaneActive={isDesktopChatPaneActive}
+            onRequestActivateChat={handleRequestActivateChat}
+            onChatUnread={handleChatUnread}
+            onChatReplyingChange={handleChatReplyingChange}
+          />
+        )}
       </SidebarInset>
     </SidebarProvider>
   )
