@@ -69,6 +69,7 @@ import {
 import { SelectModel } from "@/components/select-model"
 import { ToolButton } from "@/components/tool-button"
 import { TopFloatingHeader } from "@/components/top-floating-header"
+import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAvailableModels } from "@/hooks/use-available-models"
 import { useLatest } from "@/hooks/use-latest"
@@ -1246,7 +1247,7 @@ const AppChatInner = ({
   return (
     <div className="flex h-full flex-col">
       {/* Top */}
-      <TopFloatingHeader contentClassName="justify-center gap-1.25">
+      <TopFloatingHeader contentClassName="justify-center">
         <SelectModel
           value={selectedModel ?? undefined}
           onChange={model => setSelectedModelApiId(model.api_id)}
@@ -1524,11 +1525,15 @@ const AppChatInner = ({
                 </PromptInputTools>
 
                 {/* Tools in Right */}
-                <PromptInputTools className="gap-2.5">
+                <PromptInputTools className="gap-2">
                   <ContextWindowUsageIndicator
                     contextWindow={selectedModel?.contextWindow}
                     usage={latestAssistantUsage}
                   />
+
+                  {latestAssistantUsage && (
+                    <Separator orientation="vertical" className="h-3! mr-1" />
+                  )}
 
                   {/* Submit button */}
                   <Tooltip disableHoverableContent={true} open={undefined}>

@@ -88,6 +88,7 @@ const inputGroupButtonVariants = cva("text-sm shadow-none flex gap-2 items-cente
   variants: {
     variant: {
       default: "",
+      outline: "",
       ghost: "text-accent-foreground",
       selected: cn(
         "text-brand-green/90 hover:text-brand-green bg-brand-green-light/60 hover:bg-brand-green-light/85",

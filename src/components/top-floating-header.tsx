@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { useSidebar } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
+import { Separator } from "./ui/separator"
 
 interface TopFloatingHeaderProps {
   children: ReactNode
@@ -18,6 +19,7 @@ export function TopFloatingHeader({
   rightSlotClassName
 }: TopFloatingHeaderProps) {
   const { isCompact, open } = useSidebar()
+  const isFullWidth = isCompact || !open
 
   return (
     <div
@@ -31,11 +33,13 @@ export function TopFloatingHeader({
         data-tauri-drag-region
         className={cn(
           "fixed left-10 z-50 flex items-center pointer-events-auto",
-          !isCompact && open ? "left-66.75" : "left-43",
+          isFullWidth ? "left-43" : "left-66.75",
           "transition-left duration-300 ease",
           contentClassName
         )}
       >
+        {isFullWidth && <Separator orientation="vertical" className="h-4! mr-5" />}
+
         {children}
       </div>
 
