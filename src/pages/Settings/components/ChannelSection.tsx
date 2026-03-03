@@ -74,6 +74,26 @@ export function ChannelSection({
           Telegram
         </h2>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onTest}
+            disabled={testStatus === "testing" || saveStatus === "submitting"}
+            className="mr-2"
+          >
+            {testStatus === "testing" ? (
+              <>
+                <Loader2Icon className="size-4 animate-spin" />
+                {t("channels.testingConnection")}
+              </>
+            ) : (
+              <>
+                <Zap className="size-4" />
+                {t("channels.testConnection")}
+              </>
+            )}
+          </Button>
           <span className="text-xs text-muted-foreground">{t("channels.enable")}</span>
           <Switch
             checked={enabledChannels.telegram ?? false}
@@ -155,7 +175,8 @@ export function ChannelSection({
           <FieldLabel htmlFor="telegram-whitelist-users">{t("channels.allowedUserIds")}</FieldLabel>
           <Textarea
             id="telegram-whitelist-users"
-            rows={4}
+            rows={2}
+            className="min-h-10 max-h-20 text-sm font-mono"
             placeholder={t("channels.allowedUserIdsPlaceholder")}
             value={allowedUserIdsDraft}
             onChange={event => {
@@ -216,25 +237,6 @@ export function ChannelSection({
               <Loader2Icon className="mr-2 size-4 animate-spin" />
             ) : (
               t("providers.save")
-            )}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onTest}
-            disabled={testStatus === "testing" || saveStatus === "submitting"}
-            className="ml-auto min-w-32"
-          >
-            {testStatus === "testing" ? (
-              <>
-                <Loader2Icon className="size-4 animate-spin" />
-                {t("channels.testingConnection")}
-              </>
-            ) : (
-              <>
-                <Zap className="size-4" />
-                {t("channels.testConnection")}
-              </>
             )}
           </Button>
         </Field>
