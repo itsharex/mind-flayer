@@ -13,7 +13,8 @@ const channelRuntimeConfigSchema = z.object({
   selectedModel: selectedModelSchema.nullable(),
   channels: z.object({
     telegram: z.object({
-      enabled: z.boolean()
+      enabled: z.boolean(),
+      allowedUserIds: z.array(z.string().trim().regex(/^\d+$/))
     })
   })
 })

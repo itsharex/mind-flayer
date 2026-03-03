@@ -1,6 +1,3 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const streamTextMock = vi.fn()
@@ -25,6 +22,7 @@ vi.mock("../../utils/tool-choice", () => ({
   buildToolChoice: (...args: unknown[]) => buildToolChoiceMock(...args)
 }))
 
+import { ChannelRuntimeConfigService } from "../channel-runtime-config-service"
 import { TelegramBotService } from "../telegram-bot-service"
 
 function createTextStream(text: string): AsyncIterable<string> {
@@ -33,254 +31,323 @@ function createTextStream(text: string): AsyncIterable<string> {
   })()
 }
 
-describe("TelegramBotService local image handling", () => {
+const telegramApiSuccess = (result: unknown = { message_id: 1 }) =>
+  Promise.resolve(
+    new Response(
+      JSON.stringify({
+        ok: true,
+        result
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    )
+  )
+
+describe("TelegramBotService", () => {
   beforeEach(() => {
-    streamTextMock.mockReset()
-    processMessagesMock.mockReset()
-    buildSystemPromptMock.mockReset()
-    buildToolChoiceMock.mockReset()
+    vi.clearAllMocks()
 
     processMessagesMock.mockImplementation(async (messages: unknown) => messages)
     buildSystemPromptMock.mockReturnValue("system prompt")
     buildToolChoiceMock.mockReturnValue("auto")
   })
 
-  it("streams text, edits sanitized message, uploads local image, and stores sanitized history", async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), "mind-flayer-telegram-service-test-"))
-    const imagePath = join(tempDir, "screen.png")
-    await writeFile(
-      imagePath,
-      Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x00])
+  it("queues whitelist request from callback and supports decision", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => telegramApiSuccess(true))
     )
 
     const providerService = {
       hasConfig: vi.fn(() => true),
-      createModel: vi.fn(() => ({}))
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
     }
     const toolService = {
       getRequestTools: vi.fn(() => ({}))
     }
-    const channelRuntimeConfigService = {
-      getSelectedModel: vi.fn(() => ({ provider: "minimax", modelId: "abab6.5s-chat" }))
-    }
+
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: { provider: "minimax", modelId: "model-a" },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: []
+        }
+      }
+    })
 
     const service = new TelegramBotService(
       providerService as never,
       toolService as never,
-      channelRuntimeConfigService as never
+      runtimeConfigService
     )
-
-    const editMock = vi.fn(async () => ({}))
-    const postMock = vi.fn(async (payload: unknown) => {
-      if (payload && typeof payload === "object" && Symbol.asyncIterator in payload) {
-        for await (const _chunk of payload as AsyncIterable<string>) {
-          // consume stream chunks to simulate adapter streaming
-        }
-        return { edit: editMock }
-      }
-
-      return { edit: vi.fn(async () => ({})) }
-    })
-
-    streamTextMock.mockReturnValue({
-      textStream: createTextStream(`Done.\n![shot](file://${imagePath})`)
-    })
-
-    const thread = {
-      id: "chat-1",
-      post: postMock,
-      subscribe: vi.fn(async () => {})
-    }
 
     await (
       service as unknown as {
-        handleIncomingMessage: (thread: unknown, message: unknown) => Promise<void>
+        handleCallbackQuery: (
+          botToken: string,
+          apiBaseUrl: string,
+          callback: unknown
+        ) => Promise<void>
       }
-    ).handleIncomingMessage(thread, {
-      text: "show screenshot",
-      author: { isMe: false }
+    ).handleCallbackQuery("token", "https://api.telegram.org", {
+      id: "callback-1",
+      data: "mf_join_request_v1",
+      from: {
+        id: 42,
+        is_bot: false,
+        username: "tester",
+        first_name: "Test"
+      },
+      message: {
+        message_id: 1,
+        chat: {
+          id: 42,
+          type: "private"
+        },
+        text: "please approve"
+      }
     })
 
-    expect(postMock).toHaveBeenCalledTimes(2)
-    expect(postMock.mock.calls[0]?.[0]).toBeTruthy()
-    expect(
-      postMock.mock.calls[0]?.[0] &&
-        typeof postMock.mock.calls[0]?.[0] === "object" &&
-        Symbol.asyncIterator in (postMock.mock.calls[0]?.[0] as object)
-    ).toBe(true)
+    const requests = service.listWhitelistRequests()
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.requestId).toBe("42")
 
-    const uploadPayload = postMock.mock.calls[1]?.[0] as {
-      markdown?: string
-      files?: Array<{ filename?: string }>
-    }
-    expect(uploadPayload.markdown).toBe("shot")
-    expect(uploadPayload.files).toHaveLength(1)
-    expect(uploadPayload.files?.[0]?.filename).toBe("screen.png")
-
-    expect(editMock).toHaveBeenCalledWith("Done.\n[image: shot]")
-    const uploadCallOrder = postMock.mock.invocationCallOrder[1] ?? 0
-    const editCallOrder = editMock.mock.invocationCallOrder[0] ?? 0
-    expect(editCallOrder).toBeGreaterThan(0)
-    expect(editCallOrder).toBeLessThan(uploadCallOrder)
-
-    const sessionMessages = (
-      service as unknown as {
-        sessionMessages: Map<string, Array<{ role: string; parts: Array<{ text: string }> }>>
-      }
-    ).sessionMessages
-    const storedMessages = sessionMessages.get("telegram:chat-1")
-    expect(storedMessages).toHaveLength(2)
-    expect(storedMessages?.[1]?.role).toBe("assistant")
-    expect(storedMessages?.[1]?.parts[0]?.text).toBe("Done.\n[image: shot]")
-
-    await rm(tempDir, { recursive: true, force: true })
+    const decided = await service.decideWhitelistRequest("42", "approve")
+    expect(decided?.requestId).toBe("42")
+    expect(service.listWhitelistRequests()).toHaveLength(0)
   })
 
-  it("does not fail the whole response when image upload fails", async () => {
-    const tempDir = await mkdtemp(join(tmpdir(), "mind-flayer-telegram-service-test-"))
-    const imagePath = join(tempDir, "upload-fail.png")
-    await writeFile(
-      imagePath,
-      Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x00])
-    )
+  it("sends whitelist join button for unauthorized private message", async () => {
+    const fetchMock = vi.fn(() => telegramApiSuccess(true))
+    vi.stubGlobal("fetch", fetchMock)
 
     const providerService = {
       hasConfig: vi.fn(() => true),
-      createModel: vi.fn(() => ({}))
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn(() => ({ apiKey: "tg-token", baseUrl: "https://api.telegram.org" }))
     }
     const toolService = {
       getRequestTools: vi.fn(() => ({}))
     }
-    const channelRuntimeConfigService = {
-      getSelectedModel: vi.fn(() => ({ provider: "minimax", modelId: "abab6.5s-chat" }))
-    }
+
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: { provider: "minimax", modelId: "model-a" },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: []
+        }
+      }
+    })
 
     const service = new TelegramBotService(
       providerService as never,
       toolService as never,
-      channelRuntimeConfigService as never
+      runtimeConfigService
     )
 
-    const editMock = vi.fn(async () => ({}))
-    const postMock = vi.fn(async (payload: unknown) => {
-      if (payload && typeof payload === "object" && Symbol.asyncIterator in payload) {
-        for await (const _chunk of payload as AsyncIterable<string>) {
-          // consume stream chunks
-        }
-        return { edit: editMock }
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
       }
-
-      throw new Error("upload failed")
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 100,
+      chat: {
+        id: 99,
+        type: "private"
+      },
+      from: {
+        id: 99,
+        is_bot: false
+      },
+      text: "hello"
     })
 
-    streamTextMock.mockReturnValue({
-      textStream: createTextStream(`Try this:\n![fail](file://${imagePath})`)
-    })
-
-    const thread = {
-      id: "chat-2",
-      post: postMock,
-      subscribe: vi.fn(async () => {})
+    const firstCall = fetchMock.mock.calls[0] as unknown as [string, { body?: string } | undefined]
+    const firstCallBody = JSON.parse(String(firstCall?.[1]?.body)) as {
+      reply_markup?: { inline_keyboard?: Array<Array<{ callback_data?: string }>> }
     }
 
-    await expect(
-      (
-        service as unknown as {
-          handleIncomingMessage: (thread: unknown, message: unknown) => Promise<void>
-        }
-      ).handleIncomingMessage(thread, {
-        text: "show screenshot",
-        author: { isMe: false }
-      })
-    ).resolves.toBeUndefined()
-
-    const sessionMessages = (
-      service as unknown as {
-        sessionMessages: Map<string, Array<{ role: string; parts: Array<{ text: string }> }>>
-      }
-    ).sessionMessages
-    const storedMessages = sessionMessages.get("telegram:chat-2")
-    expect(storedMessages).toHaveLength(2)
-    expect(storedMessages?.[1]?.parts[0]?.text).toBe("Try this:\n[image: fail]")
-
-    await rm(tempDir, { recursive: true, force: true })
+    expect(firstCallBody.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data).toBe(
+      "mf_join_request_v1"
+    )
+    expect(streamTextMock).not.toHaveBeenCalled()
   })
 
-  it("exposes session summaries and cloned session messages for debug routes", async () => {
-    const providerService = {
-      hasConfig: vi.fn(() => true),
-      createModel: vi.fn(() => ({}))
-    }
-    const toolService = {
-      getRequestTools: vi.fn(() => ({}))
-    }
-    const channelRuntimeConfigService = {
-      getSelectedModel: vi.fn(() => ({ provider: "minimax", modelId: "abab6.5s-chat" }))
-    }
-
-    const service = new TelegramBotService(
-      providerService as never,
-      toolService as never,
-      channelRuntimeConfigService as never
-    )
-
-    const postMock = vi.fn(async (payload: unknown) => {
-      if (payload && typeof payload === "object" && Symbol.asyncIterator in payload) {
-        for await (const _chunk of payload as AsyncIterable<string>) {
-          // consume stream chunks
-        }
+  it("processes whitelisted messages and stores session history", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/sendMessageDraft")) {
+        return Promise.resolve(new Response("method not found", { status: 404 }))
       }
-      return { edit: vi.fn(async () => ({})) }
+      return telegramApiSuccess({ message_id: 7 })
     })
+    vi.stubGlobal("fetch", fetchMock)
 
     streamTextMock.mockReturnValue({
       textStream: createTextStream("Assistant reply")
     })
 
-    const thread = {
-      id: "chat-3",
-      post: postMock,
-      subscribe: vi.fn(async () => {})
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
     }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: { provider: "minimax", modelId: "model-a" },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: ["1001"]
+        }
+      }
+    })
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService
+    )
 
     await (
       service as unknown as {
-        handleIncomingMessage: (thread: unknown, message: unknown) => Promise<void>
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
       }
-    ).handleIncomingMessage(thread, {
-      text: "Hello",
-      author: { isMe: false }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 100,
+      chat: {
+        id: 1001,
+        type: "private"
+      },
+      from: {
+        id: 1001,
+        is_bot: false
+      },
+      text: "hello"
     })
 
     const sessions = service.listSessions()
     expect(sessions).toHaveLength(1)
-    expect(sessions[0]?.sessionKey).toBe("telegram:chat-3")
-    expect(sessions[0]?.threadId).toBe("chat-3")
-    expect(sessions[0]?.messageCount).toBe(2)
-    expect(sessions[0]?.lastMessageRole).toBe("assistant")
-    expect(sessions[0]?.lastMessagePreview).toBe("Assistant reply")
-    expect((sessions[0]?.updatedAt ?? 0) > 0).toBe(true)
+    expect(sessions[0]?.sessionKey).toBe("telegram:1001")
 
-    const firstRead = service.getSessionMessages("telegram:chat-3")
-    expect(firstRead).toHaveLength(2)
-    expect(firstRead?.[0]?.role).toBe("user")
+    const storedMessages = service.getSessionMessages("telegram:1001")
+    expect(storedMessages).toHaveLength(2)
+    expect(storedMessages?.[1]?.role).toBe("assistant")
 
-    if (!firstRead) {
-      throw new Error("Expected firstRead to be non-null")
+    // sendMessageDraft failed once (404) then fallback to final sendMessage only
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("/sendMessageDraft"))).toBe(
+      true
+    )
+  })
+
+  it("sends draft_id when calling sendMessageDraft", async () => {
+    const fetchMock = vi.fn((url: string, _options?: { body?: unknown }) => {
+      if (url.includes("/sendMessageDraft")) {
+        return telegramApiSuccess(true)
+      }
+      return telegramApiSuccess({ message_id: 9 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    streamTextMock.mockReturnValue({
+      textStream: createTextStream("Draft body")
+    })
+
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
     }
 
-    const firstMessage = firstRead[0]
-    if (!firstMessage) {
-      throw new Error("Expected first message to exist")
-    }
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: { provider: "minimax", modelId: "model-a" },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: ["2001"]
+        }
+      }
+    })
 
-    firstRead[0] = {
-      ...firstMessage,
-      id: "mutated-id"
-    }
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService
+    )
 
-    const secondRead = service.getSessionMessages("telegram:chat-3")
-    expect(secondRead?.[0]?.id).not.toBe("mutated-id")
-    expect(service.getSessionMessages("telegram:missing")).toBeNull()
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
+      }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 110,
+      chat: {
+        id: 2001,
+        type: "private"
+      },
+      from: {
+        id: 2001,
+        is_bot: false
+      },
+      text: "hello"
+    })
+
+    const draftCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes("/sendMessageDraft")
+    )
+    expect(draftCall).toBeDefined()
+
+    const secondArg = draftCall?.[1]
+    const body =
+      secondArg && typeof secondArg === "object" && secondArg.body instanceof URLSearchParams
+        ? secondArg.body
+        : null
+
+    expect(body?.get("chat_id")).toBe("2001")
+    expect(Number(body?.get("draft_id")) > 0).toBe(true)
+    expect(body?.get("text")).toBe("Draft body")
   })
 })

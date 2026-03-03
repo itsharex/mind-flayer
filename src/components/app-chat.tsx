@@ -194,6 +194,7 @@ const AppChatInner = ({
   const [webSearchMode, setWebSearchMode] = useSetting("webSearchMode")
   const [useDeepThink, setUseDeepThink] = useSetting("deepThinkEnabled")
   const [enabledChannels] = useSetting("enabledChannels")
+  const [telegramAllowedUserIds] = useSetting("telegramAllowedUserIds")
 
   const selectedModel =
     availableModels.find(m => m.api_id === selectedModelApiId) ?? availableModels[0] ?? null
@@ -254,7 +255,8 @@ const AppChatInner = ({
               : null,
           channels: {
             telegram: {
-              enabled: enabledChannels.telegram ?? false
+              enabled: enabledChannels.telegram ?? false,
+              allowedUserIds: telegramAllowedUserIds
             }
           }
         })
@@ -270,7 +272,7 @@ const AppChatInner = ({
     return () => {
       cancelled = true
     }
-  }, [enabledChannels.telegram, selectedModelId, selectedModelProvider])
+  }, [enabledChannels.telegram, selectedModelId, selectedModelProvider, telegramAllowedUserIds])
 
   const showChatErrorToast = useCallback(
     (error: Error) => {

@@ -51,7 +51,7 @@
     "neverUpdated": "Not refreshed yet",
     "lastUpdated": "Updated at {{time}}",
     "noSessionsSidebar": "No Telegram sessions.",
-    "threadId": "Thread {{threadId}}",
+    "chatId": "Chat {{chatId}}",
     "messageCount": "{{count}} msgs",
     "noPreview": "No preview",
     "noSessionsTitle": "No Telegram sessions",
@@ -59,5 +59,14 @@
     "noMessagesTitle": "No messages in this session",
     "noMessagesDescription": "Messages for the selected session will appear here.",
     "nonTextPlaceholder": "[non-text message]"
+  },
+  "telegramWhitelist": {
+    "title": "Telegram Join Request",
+    "description": "A Telegram user is requesting whitelist access.",
+    "userId": "User ID",
+    "chatId": "Chat ID",
+    "preview": "Last message",
+    "approve": "Approve",
+    "reject": "Reject"
   }
 }

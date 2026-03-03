@@ -8,6 +8,10 @@ import {
   handleTelegramChannelSessions
 } from "./channel-telegram-sessions"
 import { handleTelegramChannelTest } from "./channel-telegram-test"
+import {
+  handleTelegramWhitelistRequestDecision,
+  handleTelegramWhitelistRequests
+} from "./channel-telegram-whitelist-requests"
 import { handleChat } from "./chat"
 import { handleCleanupWorkspace } from "./cleanup"
 import { handleHealth } from "./health"
@@ -56,5 +60,13 @@ export function registerRoutes(
   )
   app.get("/api/channels/telegram/session-messages", c =>
     handleTelegramChannelSessionMessages(c, telegramBotService)
+  )
+
+  // Telegram whitelist approval endpoints
+  app.get("/api/channels/telegram/whitelist-requests", c =>
+    handleTelegramWhitelistRequests(c, telegramBotService)
+  )
+  app.post("/api/channels/telegram/whitelist-requests/decision", c =>
+    handleTelegramWhitelistRequestDecision(c, telegramBotService)
   )
 }

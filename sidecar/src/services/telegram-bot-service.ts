@@ -1,14 +1,12 @@
-import { createMemoryState } from "@chat-adapter/state-memory"
-import { createTelegramAdapter } from "@chat-adapter/telegram"
+import { randomInt, randomUUID } from "node:crypto"
 import type { LanguageModel } from "ai"
 import { stepCountIs, streamText, type UIMessage } from "ai"
-import { Chat, type PostableMessage, type SentMessage } from "chat"
 import { processMessages } from "../utils/message-processor"
 import { buildSystemPrompt } from "../utils/system-prompt-builder"
 import {
-  type TelegramImageUpload,
-  transformTelegramImageMessage
-} from "../utils/telegram-image-message"
+  type TelegramMediaUpload,
+  transformTelegramMediaMessage
+} from "../utils/telegram-media-message"
 import { buildToolChoice } from "../utils/tool-choice"
 import type { ChannelRuntimeConfigService } from "./channel-runtime-config-service"
 import type { ProviderService } from "./provider-service"
@@ -21,51 +19,142 @@ const RETRY_BASE_DELAY_MS = 1000
 const RETRY_MAX_DELAY_MS = 30_000
 const MAX_SESSION_MESSAGES = 40
 const LOG_TEXT_PREVIEW_LENGTH = 100
-
-type LogValue = string | number | boolean | null | undefined
+const TELEGRAM_MAX_MESSAGE_LENGTH = 4096
+const TELEGRAM_DRAFT_UPDATE_INTERVAL_MS = 700
+const WHITELIST_JOIN_BUTTON_TEXT = "Join the Channel"
+const JOIN_REQUEST_CALLBACK_DATA = "mf_join_request_v1"
+const WHITELIST_DENY_COOLDOWN_MS = 10 * 60 * 1000
 
 interface TelegramApiResponse<T> {
   ok: boolean
   result: T
   description?: string
+  error_code?: number
 }
 
-interface TelegramThread {
-  id: string
-  isDM?: boolean
-  subscribe: () => Promise<void>
-  post: (message: string | PostableMessage | AsyncIterable<string>) => Promise<SentMessage>
+interface TelegramChat {
+  id: number
+  type: string
+  title?: string
+  username?: string
+  first_name?: string
+  last_name?: string
+}
+
+interface TelegramUser {
+  id: number
+  is_bot: boolean
+  username?: string
+  first_name?: string
+  last_name?: string
+}
+
+interface TelegramPhotoSize {
+  file_id: string
+  width: number
+  height: number
+  file_size?: number
+}
+
+interface TelegramDocument {
+  file_id: string
+  file_name?: string
+  mime_type?: string
+  file_size?: number
+}
+
+interface TelegramVideo {
+  file_id: string
+  width?: number
+  height?: number
+  duration?: number
+  file_name?: string
+  mime_type?: string
+  file_size?: number
+}
+
+interface TelegramAudio {
+  file_id: string
+  duration?: number
+  performer?: string
+  title?: string
+  file_name?: string
+  mime_type?: string
+  file_size?: number
+}
+
+interface TelegramVoice {
+  file_id: string
+  duration?: number
+  mime_type?: string
+  file_size?: number
 }
 
 interface TelegramMessage {
+  message_id: number
+  chat: TelegramChat
+  from?: TelegramUser
   text?: string
-  isMention?: boolean
-  author?: {
-    isMe?: boolean
-  }
+  caption?: string
+  date?: number
+  photo?: TelegramPhotoSize[]
+  document?: TelegramDocument
+  video?: TelegramVideo
+  audio?: TelegramAudio
+  voice?: TelegramVoice
 }
+
+interface TelegramCallbackQuery {
+  id: string
+  from: TelegramUser
+  message?: TelegramMessage
+  data?: string
+}
+
+interface TelegramUpdate {
+  update_id: number
+  message?: TelegramMessage
+  callback_query?: TelegramCallbackQuery
+}
+
+interface TelegramSentMessage {
+  message_id: number
+}
+
+type LogValue = string | number | boolean | null | undefined
 
 export interface TelegramSessionSummary {
   sessionKey: string
-  threadId: string
+  chatId: string
   updatedAt: number
   messageCount: number
   lastMessageRole: UIMessage["role"] | null
   lastMessagePreview: string
 }
 
-/**
- * Orchestrates Telegram adapter lifecycle and long polling.
- * Runs only when channel is enabled, token exists, and selected model is set.
- */
+export interface TelegramWhitelistRequest {
+  requestId: string
+  userId: string
+  chatId: string
+  username?: string
+  firstName?: string
+  lastName?: string
+  requestedAt: number
+  lastMessagePreview: string
+}
+
+export type TelegramWhitelistDecision = "approve" | "reject"
+
 export class TelegramBotService {
-  private bot: Chat | null = null
   private pollingAbortController: AbortController | null = null
   private pollingTask: Promise<void> | null = null
   private runtimeSignature: string | null = null
   private refreshChain: Promise<void> = Promise.resolve()
   private sessionMessages = new Map<string, UIMessage[]>()
   private sessionUpdatedAt = new Map<string, number>()
+  private whitelistRequests = new Map<string, TelegramWhitelistRequest>()
+  private deniedCooldownByUserId = new Map<string, number>()
+  private temporaryApprovedUserIds = new Set<string>()
 
   constructor(
     private readonly providerService: ProviderService,
@@ -93,14 +182,14 @@ export class TelegramBotService {
     const summaries: TelegramSessionSummary[] = []
 
     for (const [sessionKey, messages] of this.sessionMessages.entries()) {
-      const threadId = this.extractThreadIdFromSessionKey(sessionKey)
+      const chatId = this.extractChatIdFromSessionKey(sessionKey)
       const updatedAt = this.sessionUpdatedAt.get(sessionKey) ?? 0
       const lastMessage = messages[messages.length - 1]
       const lastMessageText = this.extractMessageText(lastMessage)
 
       summaries.push({
         sessionKey,
-        threadId,
+        chatId,
         updatedAt,
         messageCount: messages.length,
         lastMessageRole: lastMessage?.role ?? null,
@@ -121,6 +210,49 @@ export class TelegramBotService {
     return JSON.parse(JSON.stringify(messages)) as UIMessage[]
   }
 
+  listWhitelistRequests(): TelegramWhitelistRequest[] {
+    return [...this.whitelistRequests.values()].sort((a, b) => b.requestedAt - a.requestedAt)
+  }
+
+  async decideWhitelistRequest(
+    requestId: string,
+    decision: TelegramWhitelistDecision
+  ): Promise<TelegramWhitelistRequest | null> {
+    const request = this.whitelistRequests.get(requestId)
+    if (!request) {
+      return null
+    }
+
+    this.whitelistRequests.delete(requestId)
+
+    if (decision === "approve") {
+      this.temporaryApprovedUserIds.add(request.userId)
+      await this.sendTextMessage(
+        request.chatId,
+        "Your access request has been approved. You can now chat with this bot."
+      )
+      this.logInfo("Whitelist request approved", {
+        requestId,
+        userId: request.userId,
+        chatId: request.chatId
+      })
+      return request
+    }
+
+    this.deniedCooldownByUserId.set(request.userId, Date.now() + WHITELIST_DENY_COOLDOWN_MS)
+    await this.sendTextMessage(
+      request.chatId,
+      "Your access request was declined. You can submit another request in 10 minutes."
+    )
+    this.logInfo("Whitelist request rejected", {
+      requestId,
+      userId: request.userId,
+      chatId: request.chatId
+    })
+
+    return request
+  }
+
   private async refreshInternal(): Promise<void> {
     const selectedModel = this.channelRuntimeConfigService.getSelectedModel()
     const telegramEnabled = this.channelRuntimeConfigService.isTelegramEnabled()
@@ -139,23 +271,16 @@ export class TelegramBotService {
 
     const shouldRun = telegramEnabled && Boolean(botToken) && Boolean(selectedModel)
     if (!shouldRun) {
-      this.logInfo("Runtime is not eligible to run", {
-        enabled: telegramEnabled,
-        hasToken: Boolean(botToken),
-        hasSelectedModel: Boolean(selectedModel)
-      })
       await this.stopRuntime("disabled or missing runtime dependencies")
       return
     }
 
     const isAlreadyRunning =
-      this.bot !== null &&
       this.pollingTask !== null &&
       this.pollingAbortController !== null &&
       this.runtimeSignature === nextSignature
 
     if (isAlreadyRunning) {
-      this.logInfo("Runtime already active, skipping restart")
       return
     }
 
@@ -168,101 +293,20 @@ export class TelegramBotService {
     apiBaseUrl: string,
     runtimeSignature: string
   ): Promise<void> {
-    this.logInfo("Starting runtime", {
-      apiBaseUrl,
-      hasToken: Boolean(botToken)
-    })
-
-    const bot = new Chat({
-      userName: "mind-flayer",
-      adapters: {
-        telegram: createTelegramAdapter({
-          botToken,
-          apiBaseUrl
-        })
-      },
-      state: createMemoryState()
-    })
-
-    bot.onNewMention(async (thread: unknown, message: unknown) => {
-      const telegramThread = thread as unknown as TelegramThread
-      const telegramMessage = message as unknown as TelegramMessage
-      this.logInfo("Received onNewMention event", {
-        threadId: telegramThread.id,
-        textPreview: this.toTextPreview(telegramMessage.text),
-        isMe: Boolean(telegramMessage.author?.isMe)
-      })
-
-      try {
-        await telegramThread.subscribe()
-        this.logInfo("Subscribed to thread", {
-          threadId: telegramThread.id
-        })
-      } catch (error) {
-        console.warn("[TelegramBotService] Failed to subscribe thread:", error)
-      }
-
-      await this.handleIncomingMessage(telegramThread, telegramMessage)
-    })
-
-    bot.onSubscribedMessage(async (thread: unknown, message: unknown) => {
-      const telegramThread = thread as unknown as TelegramThread
-      const telegramMessage = message as unknown as TelegramMessage
-      this.logInfo("Received onSubscribedMessage event", {
-        threadId: telegramThread.id,
-        textPreview: this.toTextPreview(telegramMessage.text),
-        isMe: Boolean(telegramMessage.author?.isMe)
-      })
-      await this.handleIncomingMessage(telegramThread, telegramMessage)
-    })
-
-    // Fallback for Telegram DM first message without explicit @mention.
-    // Only handles DM or explicit mentions to avoid group-wide noise.
-    bot.onNewMessage(/[\s\S]+/, async (thread: unknown, message: unknown) => {
-      const telegramThread = thread as unknown as TelegramThread
-      const telegramMessage = message as unknown as TelegramMessage
-      const isDM = Boolean(telegramThread.isDM)
-      const isMention = Boolean(telegramMessage.isMention)
-
-      this.logInfo("Received onNewMessage event", {
-        threadId: telegramThread.id,
-        isDM,
-        isMention,
-        textPreview: this.toTextPreview(telegramMessage.text)
-      })
-
-      if (!isDM && !isMention) {
-        this.logInfo("Ignoring onNewMessage event (not DM and not mention)", {
-          threadId: telegramThread.id
-        })
-        return
-      }
-
-      if (!isDM && isMention) {
-        try {
-          await telegramThread.subscribe()
-          this.logInfo("Subscribed to thread via onNewMessage mention", {
-            threadId: telegramThread.id
-          })
-        } catch (error) {
-          console.warn("[TelegramBotService] Failed to subscribe thread:", error)
-        }
-      }
-
-      await this.handleIncomingMessage(telegramThread, telegramMessage)
-    })
+    await this.deleteWebhook(botToken, apiBaseUrl)
 
     const pollAbortController = new AbortController()
-
-    this.bot = bot
     this.pollingAbortController = pollAbortController
     this.runtimeSignature = runtimeSignature
-    this.pollingTask = this.runPollingLoop(bot, botToken, apiBaseUrl, pollAbortController.signal)
-    this.logInfo("Runtime started")
+    this.pollingTask = this.runPollingLoop(botToken, apiBaseUrl, pollAbortController.signal)
+
+    this.logInfo("Runtime started", {
+      apiBaseUrl
+    })
   }
 
   private async stopRuntime(reason: string): Promise<void> {
-    if (!this.bot && !this.pollingTask && !this.pollingAbortController) {
+    if (!this.pollingTask && !this.pollingAbortController) {
       return
     }
 
@@ -276,7 +320,6 @@ export class TelegramBotService {
       this.pollingAbortController.abort()
     }
 
-    this.bot = null
     this.pollingAbortController = null
     this.pollingTask = null
     this.runtimeSignature = null
@@ -293,14 +336,12 @@ export class TelegramBotService {
   }
 
   private async runPollingLoop(
-    bot: Chat,
     botToken: string,
     apiBaseUrl: string,
     signal: AbortSignal
   ): Promise<void> {
     let offset: number | undefined
     let retryDelayMs = RETRY_BASE_DELAY_MS
-    let webhookDeleted = false
 
     this.logInfo("Long polling started", {
       baseUrl: apiBaseUrl,
@@ -309,35 +350,16 @@ export class TelegramBotService {
 
     while (!signal.aborted) {
       try {
-        if (!webhookDeleted) {
-          await this.deleteWebhook(botToken, apiBaseUrl)
-          webhookDeleted = true
-          this.logInfo("Webhook cleared, switched to long polling", {
-            baseUrl: apiBaseUrl
-          })
-        }
-
         const updates = await this.getUpdates(botToken, apiBaseUrl, offset, signal)
         retryDelayMs = RETRY_BASE_DELAY_MS
-
-        if (updates.length > 0) {
-          this.logInfo("Polling received updates", {
-            count: updates.length,
-            currentOffset: offset ?? null
-          })
-        }
 
         for (const update of updates) {
           if (signal.aborted) {
             break
           }
 
-          const updateId = this.extractUpdateId(update)
-          if (updateId !== null) {
-            offset = updateId + 1
-          }
-
-          await this.dispatchUpdate(bot, update)
+          offset = update.update_id + 1
+          await this.handleUpdate(botToken, apiBaseUrl, update)
         }
       } catch (error) {
         if (signal.aborted) {
@@ -345,9 +367,6 @@ export class TelegramBotService {
         }
 
         console.error(`[TelegramBotService] Polling error (baseURL=${apiBaseUrl}):`, error)
-        this.logInfo("Polling retry scheduled", {
-          retryDelayMs
-        })
         await this.delay(retryDelayMs, signal)
         retryDelayMs = Math.min(retryDelayMs * 2, RETRY_MAX_DELAY_MS)
       }
@@ -356,11 +375,494 @@ export class TelegramBotService {
     this.logInfo("Long polling stopped")
   }
 
-  private async deleteWebhook(botToken: string, apiBaseUrl: string): Promise<void> {
-    this.logInfo("Deleting webhook", {
-      baseUrl: apiBaseUrl
+  private async handleUpdate(
+    botToken: string,
+    apiBaseUrl: string,
+    update: TelegramUpdate
+  ): Promise<void> {
+    if (update.callback_query) {
+      await this.handleCallbackQuery(botToken, apiBaseUrl, update.callback_query)
+      return
+    }
+
+    if (!update.message) {
+      return
+    }
+
+    await this.handleIncomingMessage(botToken, apiBaseUrl, update.message)
+  }
+
+  private isAllowedPrivateUser(userId: string): boolean {
+    const configuredUserIds = new Set(this.channelRuntimeConfigService.getAllowedTelegramUserIds())
+    if (configuredUserIds.has(userId)) {
+      return true
+    }
+
+    return this.temporaryApprovedUserIds.has(userId)
+  }
+
+  private async handleCallbackQuery(
+    botToken: string,
+    apiBaseUrl: string,
+    callback: TelegramCallbackQuery
+  ): Promise<void> {
+    if (callback.data !== JOIN_REQUEST_CALLBACK_DATA) {
+      await this.answerCallbackQuery(botToken, apiBaseUrl, callback.id, "Unsupported action")
+      return
+    }
+
+    const message = callback.message
+    if (!message || message.chat.type !== "private") {
+      await this.answerCallbackQuery(
+        botToken,
+        apiBaseUrl,
+        callback.id,
+        "Join requests are only supported in private chat"
+      )
+      return
+    }
+
+    const userId = String(callback.from.id)
+    const chatId = String(message.chat.id)
+
+    if (this.isAllowedPrivateUser(userId)) {
+      await this.answerCallbackQuery(botToken, apiBaseUrl, callback.id, "Already approved")
+      return
+    }
+
+    const cooldownUntil = this.deniedCooldownByUserId.get(userId) ?? 0
+    if (cooldownUntil > Date.now()) {
+      const secondsLeft = Math.ceil((cooldownUntil - Date.now()) / 1000)
+      await this.answerCallbackQuery(
+        botToken,
+        apiBaseUrl,
+        callback.id,
+        `Please retry in ${secondsLeft}s`,
+        true
+      )
+      return
+    }
+
+    const requestId = userId
+    const existing = this.whitelistRequests.get(requestId)
+    if (!existing) {
+      this.whitelistRequests.set(requestId, {
+        requestId,
+        userId,
+        chatId,
+        username: callback.from.username,
+        firstName: callback.from.first_name,
+        lastName: callback.from.last_name,
+        requestedAt: Date.now(),
+        lastMessagePreview: this.toTextPreview(message.text ?? message.caption)
+      })
+    }
+
+    await this.answerCallbackQuery(botToken, apiBaseUrl, callback.id, "Request submitted", true)
+    await this.sendTextMessage(chatId, "Your join request has been submitted for approval.")
+
+    this.logInfo("Whitelist request queued", {
+      requestId,
+      userId,
+      chatId
+    })
+  }
+
+  private async handleIncomingMessage(
+    botToken: string,
+    apiBaseUrl: string,
+    message: TelegramMessage
+  ): Promise<void> {
+    if (message.chat.type !== "private") {
+      return
+    }
+
+    if (message.from?.is_bot) {
+      return
+    }
+
+    const userId = message.from ? String(message.from.id) : ""
+    const chatId = String(message.chat.id)
+
+    if (!userId) {
+      return
+    }
+
+    if (!this.isAllowedPrivateUser(userId)) {
+      await this.sendWhitelistJoinButton(chatId)
+      return
+    }
+
+    const incomingText = this.buildIncomingMessageText(message)
+    if (!incomingText) {
+      return
+    }
+
+    const selectedModel = this.channelRuntimeConfigService.getSelectedModel()
+    if (!selectedModel) {
+      await this.sendTextMessage(
+        chatId,
+        "No model is selected in Mind Flayer. Please select one and try again."
+      )
+      return
+    }
+
+    if (!this.providerService.hasConfig(selectedModel.provider)) {
+      await this.sendTextMessage(
+        chatId,
+        `Selected model provider '${selectedModel.provider}' is not configured in Mind Flayer settings.`
+      )
+      return
+    }
+
+    let model: LanguageModel
+    try {
+      model = this.providerService.createModel(selectedModel.provider, selectedModel.modelId)
+    } catch (error) {
+      await this.sendTextMessage(
+        chatId,
+        `Failed to load model '${selectedModel.modelId}'. Please verify your model settings in Mind Flayer.`
+      )
+      console.error("[TelegramBotService] Failed to create model:", error)
+      return
+    }
+
+    const sessionKey = `telegram:${chatId}`
+    const history = this.sessionMessages.get(sessionKey) ?? []
+    const messagesWithLatestInput = this.trimSessionMessages([
+      ...history,
+      this.createTextMessage("user", incomingText)
+    ])
+    this.setSessionMessages(sessionKey, messagesWithLatestInput)
+
+    try {
+      const tools = this.toolService.getRequestTools({
+        useWebSearch: true,
+        chatId: this.toSafeToolSessionId(sessionKey),
+        includeBashExecution: true,
+        source: "channel"
+      })
+      const toolChoice = buildToolChoice({
+        useWebSearch: true,
+        webSearchMode: "auto",
+        messages: messagesWithLatestInput
+      })
+      const modelMessages = await processMessages(messagesWithLatestInput, tools)
+
+      const result = streamText({
+        model,
+        system: buildSystemPrompt(),
+        messages: modelMessages,
+        tools,
+        toolChoice,
+        stopWhen: Object.keys(tools).length > 0 ? stepCountIs(20) : stepCountIs(1)
+      })
+
+      let assistantText = ""
+      let lastDraftAt = 0
+      let draftSupported = true
+      const draftId = this.createDraftId()
+
+      for await (const chunk of result.textStream) {
+        assistantText += chunk
+
+        if (!draftSupported) {
+          continue
+        }
+
+        const now = Date.now()
+        if (now - lastDraftAt < TELEGRAM_DRAFT_UPDATE_INTERVAL_MS) {
+          continue
+        }
+
+        const draftText = assistantText.trim()
+        if (!draftText) {
+          continue
+        }
+
+        const previewDraft = this.sliceTelegramMessage(draftText)
+
+        try {
+          await this.sendMessageDraft(botToken, apiBaseUrl, chatId, draftId, previewDraft)
+          lastDraftAt = now
+        } catch (error) {
+          draftSupported = false
+          this.logInfo("sendMessageDraft unavailable, fallback to final sendMessage only", {
+            chatId,
+            reason: error instanceof Error ? error.message : String(error)
+          })
+        }
+      }
+
+      const normalizedAssistantText = assistantText.trim()
+      if (!normalizedAssistantText) {
+        const fallbackText = "I could not generate a response. Please try again."
+        await this.sendTextMessage(chatId, fallbackText)
+        this.setSessionMessages(
+          sessionKey,
+          this.trimSessionMessages([
+            ...messagesWithLatestInput,
+            this.createTextMessage("assistant", fallbackText)
+          ])
+        )
+        return
+      }
+
+      const transformed = await transformTelegramMediaMessage(normalizedAssistantText)
+      transformed.warnings.forEach(warning => {
+        this.logInfo("Telegram media transform warning", {
+          chatId,
+          warning
+        })
+      })
+
+      const sanitizedText = transformed.sanitizedText || normalizedAssistantText
+      await this.sendTextInChunks(chatId, sanitizedText)
+      await this.sendMediaUploads(chatId, transformed.uploads)
+
+      this.setSessionMessages(
+        sessionKey,
+        this.trimSessionMessages([
+          ...messagesWithLatestInput,
+          this.createTextMessage("assistant", sanitizedText)
+        ])
+      )
+    } catch (error) {
+      console.error("[TelegramBotService] Failed to process message:", error)
+      await this.sendTextMessage(chatId, "Error: Failed to generate response. Please try again.")
+    }
+  }
+
+  private buildIncomingMessageText(message: TelegramMessage): string {
+    const parts: string[] = []
+    const text = message.text?.trim()
+    const caption = message.caption?.trim()
+
+    if (text) {
+      parts.push(text)
+    }
+
+    if (caption && caption !== text) {
+      parts.push(caption)
+    }
+
+    if (message.photo && message.photo.length > 0) {
+      const largest = message.photo.reduce((max, next) => {
+        const maxArea = max.width * max.height
+        const nextArea = next.width * next.height
+        return nextArea > maxArea ? next : max
+      })
+      parts.push(
+        `[user sent photo id=${largest.file_id} width=${largest.width} height=${largest.height}${largest.file_size ? ` size=${largest.file_size}` : ""}]`
+      )
+    }
+
+    if (message.video) {
+      const { file_id, width, height, duration, file_name, mime_type, file_size } = message.video
+      parts.push(
+        `[user sent video id=${file_id}${file_name ? ` file=${file_name}` : ""}${mime_type ? ` mime=${mime_type}` : ""}${width ? ` width=${width}` : ""}${height ? ` height=${height}` : ""}${duration ? ` duration=${duration}s` : ""}${file_size ? ` size=${file_size}` : ""}]`
+      )
+    }
+
+    if (message.audio) {
+      const { file_id, duration, performer, title, file_name, mime_type, file_size } = message.audio
+      parts.push(
+        `[user sent audio id=${file_id}${file_name ? ` file=${file_name}` : ""}${title ? ` title=${title}` : ""}${performer ? ` performer=${performer}` : ""}${mime_type ? ` mime=${mime_type}` : ""}${duration ? ` duration=${duration}s` : ""}${file_size ? ` size=${file_size}` : ""}]`
+      )
+    }
+
+    if (message.voice) {
+      const { file_id, duration, mime_type, file_size } = message.voice
+      parts.push(
+        `[user sent voice id=${file_id}${mime_type ? ` mime=${mime_type}` : ""}${duration ? ` duration=${duration}s` : ""}${file_size ? ` size=${file_size}` : ""}]`
+      )
+    }
+
+    if (message.document) {
+      const { file_id, file_name, mime_type, file_size } = message.document
+      parts.push(
+        `[user sent document id=${file_id}${file_name ? ` file=${file_name}` : ""}${mime_type ? ` mime=${mime_type}` : ""}${file_size ? ` size=${file_size}` : ""}]`
+      )
+    }
+
+    return parts.join("\n").trim()
+  }
+
+  private async sendWhitelistJoinButton(chatId: string): Promise<void> {
+    await this.callTelegramApi("sendMessage", {
+      chat_id: chatId,
+      text: "You are not authorized yet. Request access below.",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: WHITELIST_JOIN_BUTTON_TEXT, callback_data: JOIN_REQUEST_CALLBACK_DATA }]
+        ]
+      }
+    })
+  }
+
+  private async sendMediaUploads(chatId: string, uploads: TelegramMediaUpload[]): Promise<void> {
+    for (const upload of uploads) {
+      try {
+        await this.sendMediaUpload(chatId, upload)
+      } catch (error) {
+        console.warn("[TelegramBotService] Failed to send media upload:", error)
+      }
+    }
+  }
+
+  private async sendMediaUpload(chatId: string, upload: TelegramMediaUpload): Promise<void> {
+    const formData = new FormData()
+    formData.set("chat_id", chatId)
+
+    if (upload.caption) {
+      formData.set("caption", upload.caption)
+    }
+
+    const blob = new Blob([new Uint8Array(upload.data)], { type: upload.mimeType })
+
+    if (upload.kind === "photo") {
+      formData.set("photo", blob, upload.filename)
+      await this.callTelegramApi("sendPhoto", formData, true)
+      return
+    }
+
+    if (upload.kind === "video") {
+      formData.set("video", blob, upload.filename)
+      await this.callTelegramApi("sendVideo", formData, true)
+      return
+    }
+
+    if (upload.kind === "audio") {
+      formData.set("audio", blob, upload.filename)
+      await this.callTelegramApi("sendAudio", formData, true)
+      return
+    }
+
+    formData.set("document", blob, upload.filename)
+    await this.callTelegramApi("sendDocument", formData, true)
+  }
+
+  private async sendTextInChunks(chatId: string, text: string): Promise<void> {
+    const chunks = this.splitTelegramMessage(text)
+
+    for (const chunk of chunks) {
+      await this.sendTextMessage(chatId, chunk)
+    }
+  }
+
+  private async sendTextMessage(chatId: string, text: string): Promise<void> {
+    await this.callTelegramApi("sendMessage", {
+      chat_id: chatId,
+      text
+    })
+  }
+
+  private async sendMessageDraft(
+    botToken: string,
+    apiBaseUrl: string,
+    chatId: string,
+    draftId: number,
+    text: string
+  ): Promise<void> {
+    const body = new URLSearchParams()
+    body.set("chat_id", chatId)
+    body.set("draft_id", String(draftId))
+    body.set("text", text)
+
+    const response = await fetch(`${apiBaseUrl}/bot${botToken}/sendMessageDraft`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body
     })
 
+    if (!response.ok) {
+      throw new Error(`sendMessageDraft failed with HTTP ${response.status}`)
+    }
+
+    const payload = (await response.json()) as TelegramApiResponse<unknown>
+    if (!payload.ok) {
+      throw new Error(`sendMessageDraft failed: ${payload.description || "unknown error"}`)
+    }
+  }
+
+  private createDraftId(): number {
+    // Telegram requires non-zero draft_id; keep it in signed 32-bit range.
+    return randomInt(1, 2_147_483_647)
+  }
+
+  private splitTelegramMessage(text: string): string[] {
+    const trimmed = text.trim()
+    if (!trimmed) {
+      return ["I could not generate a response. Please try again."]
+    }
+
+    const chunks: string[] = []
+    let cursor = 0
+
+    while (cursor < trimmed.length) {
+      const limit = Math.min(cursor + TELEGRAM_MAX_MESSAGE_LENGTH, trimmed.length)
+      let nextCursor = limit
+
+      if (limit < trimmed.length) {
+        const lastNewline = trimmed.lastIndexOf("\n", limit)
+        const lastSpace = trimmed.lastIndexOf(" ", limit)
+        const boundary = Math.max(lastNewline, lastSpace)
+        if (boundary > cursor + TELEGRAM_MAX_MESSAGE_LENGTH * 0.6) {
+          nextCursor = boundary + 1
+        }
+      }
+
+      const chunk = trimmed.slice(cursor, nextCursor).trim()
+      if (chunk) {
+        chunks.push(chunk)
+      }
+
+      cursor = nextCursor
+    }
+
+    return chunks.length > 0 ? chunks : [trimmed]
+  }
+
+  private sliceTelegramMessage(text: string): string {
+    if (text.length <= TELEGRAM_MAX_MESSAGE_LENGTH) {
+      return text
+    }
+
+    return `${text.slice(0, TELEGRAM_MAX_MESSAGE_LENGTH - 1)}…`
+  }
+
+  private async answerCallbackQuery(
+    botToken: string,
+    apiBaseUrl: string,
+    callbackQueryId: string,
+    text: string,
+    showAlert = false
+  ): Promise<void> {
+    const response = await fetch(`${apiBaseUrl}/bot${botToken}/answerCallbackQuery`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text,
+        show_alert: showAlert
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error(`answerCallbackQuery failed with HTTP ${response.status}`)
+    }
+
+    const payload = (await response.json()) as TelegramApiResponse<true>
+    if (!payload.ok) {
+      throw new Error(`answerCallbackQuery failed: ${payload.description || "unknown error"}`)
+    }
+  }
+
+  private async deleteWebhook(botToken: string, apiBaseUrl: string): Promise<void> {
     const response = await fetch(`${apiBaseUrl}/bot${botToken}/deleteWebhook`, {
       method: "POST",
       headers: {
@@ -377,8 +879,6 @@ export class TelegramBotService {
     if (!payload.ok) {
       throw new Error(`deleteWebhook failed: ${payload.description || "unknown error"}`)
     }
-
-    this.logInfo("deleteWebhook succeeded")
   }
 
   private async getUpdates(
@@ -386,7 +886,7 @@ export class TelegramBotService {
     apiBaseUrl: string,
     offset: number | undefined,
     signal: AbortSignal
-  ): Promise<unknown[]> {
+  ): Promise<TelegramUpdate[]> {
     const response = await fetch(`${apiBaseUrl}/bot${botToken}/getUpdates`, {
       method: "POST",
       headers: {
@@ -394,7 +894,8 @@ export class TelegramBotService {
       },
       body: JSON.stringify({
         timeout: LONG_POLL_TIMEOUT_SECONDS,
-        offset
+        offset,
+        allowed_updates: ["message", "callback_query"]
       }),
       signal
     })
@@ -403,352 +904,52 @@ export class TelegramBotService {
       throw new Error(`getUpdates failed with HTTP ${response.status}`)
     }
 
-    const payload = (await response.json()) as TelegramApiResponse<unknown[]>
+    const payload = (await response.json()) as TelegramApiResponse<TelegramUpdate[]>
     if (!payload.ok) {
       throw new Error(`getUpdates failed: ${payload.description || "unknown error"}`)
     }
-    if (!Array.isArray(payload.result)) {
-      return []
-    }
 
-    return payload.result
+    return Array.isArray(payload.result) ? payload.result : []
   }
 
-  private async dispatchUpdate(bot: Chat, update: unknown): Promise<void> {
-    const updateId = this.extractUpdateId(update)
-    const updateType = this.extractUpdateType(update)
+  private async callTelegramApi<T = TelegramSentMessage>(
+    method: string,
+    payload: object | FormData,
+    isFormData = false
+  ): Promise<T> {
+    const telegramConfig = this.providerService.getConfig(TELEGRAM_PROVIDER_ID)
+    const botToken = telegramConfig?.apiKey?.trim() ?? ""
+    const apiBaseUrl = telegramConfig?.baseUrl?.trim() || DEFAULT_TELEGRAM_API_BASE_URL
 
-    this.logInfo("Dispatching update", {
-      updateId,
-      updateType
-    })
+    if (!botToken) {
+      throw new Error("Telegram bot token is not configured")
+    }
 
-    const startedAt = Date.now()
-    const request = new Request("http://localhost/telegram-long-polling", {
+    const response = await fetch(`${apiBaseUrl}/bot${botToken}/${method}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(update)
+      headers: isFormData
+        ? undefined
+        : {
+            "Content-Type": "application/json"
+          },
+      body: isFormData ? (payload as FormData) : JSON.stringify(payload)
     })
-
-    const response = await bot.webhooks.telegram(request)
-    const durationMs = Date.now() - startedAt
 
     if (!response.ok) {
-      const responseText = await response.text().catch(() => "")
-      console.warn(
-        `[TelegramBotService] Telegram webhook handler returned ${response.status}: ${responseText}`
-      )
-      this.logInfo("Update dispatch failed", {
-        updateId,
-        updateType,
-        status: response.status,
-        durationMs
-      })
-      return
+      throw new Error(`${method} failed with HTTP ${response.status}`)
     }
 
-    this.logInfo("Update dispatched successfully", {
-      updateId,
-      updateType,
-      status: response.status,
-      durationMs
-    })
-  }
-
-  private async handleIncomingMessage(
-    thread: TelegramThread,
-    message: TelegramMessage
-  ): Promise<void> {
-    this.logInfo("Incoming message received", {
-      threadId: thread.id,
-      isMe: Boolean(message.author?.isMe),
-      hasText: Boolean(message.text?.trim()),
-      textPreview: this.toTextPreview(message.text)
-    })
-
-    if (message.author?.isMe) {
-      this.logInfo("Ignoring self-authored message", {
-        threadId: thread.id
-      })
-      return
+    const result = (await response.json()) as TelegramApiResponse<T>
+    if (!result.ok) {
+      throw new Error(`${method} failed: ${result.description || "unknown error"}`)
     }
 
-    const text = message.text?.trim()
-    if (!text) {
-      this.logInfo("Ignoring message without text", {
-        threadId: thread.id
-      })
-      return
-    }
-
-    const selectedModel = this.channelRuntimeConfigService.getSelectedModel()
-    if (!selectedModel) {
-      this.logInfo("No selected model, sending user guidance", {
-        threadId: thread.id
-      })
-      await this.postToThread(
-        thread,
-        "No model is selected in Mind Flayer. Please select one and try again.",
-        "missing_selected_model"
-      )
-      return
-    }
-
-    if (!this.providerService.hasConfig(selectedModel.provider)) {
-      this.logInfo("Model provider is not configured", {
-        threadId: thread.id,
-        provider: selectedModel.provider
-      })
-      await this.postToThread(
-        thread,
-        `Selected model provider '${selectedModel.provider}' is not configured in Mind Flayer settings.`,
-        "missing_provider_config"
-      )
-      return
-    }
-
-    let model: LanguageModel
-    try {
-      model = this.providerService.createModel(selectedModel.provider, selectedModel.modelId)
-    } catch (error) {
-      await this.postToThread(
-        thread,
-        `Failed to load model '${selectedModel.modelId}'. Please verify your model settings in Mind Flayer.`,
-        "model_create_failed"
-      )
-      console.error("[TelegramBotService] Failed to create model:", error)
-      return
-    }
-
-    const sessionKey = `telegram:${thread.id}`
-    const history = this.sessionMessages.get(sessionKey) ?? []
-    const messagesWithLatestInput = this.trimSessionMessages([
-      ...history,
-      this.createTextMessage("user", text)
-    ])
-    this.setSessionMessages(sessionKey, messagesWithLatestInput)
-
-    this.logInfo("Prepared session context", {
-      threadId: thread.id,
-      sessionKey,
-      historyCount: history.length,
-      inputChars: text.length,
-      contextCount: messagesWithLatestInput.length,
-      selectedModel: `${selectedModel.provider}/${selectedModel.modelId}`
-    })
-
-    try {
-      const tools = this.toolService.getRequestTools({
-        useWebSearch: true,
-        chatId: this.toSafeToolSessionId(sessionKey),
-        includeBashExecution: true,
-        source: "channel"
-      })
-      const toolChoice = buildToolChoice({
-        useWebSearch: true,
-        webSearchMode: "auto",
-        messages: messagesWithLatestInput
-      })
-      const modelMessages = await processMessages(messagesWithLatestInput, tools)
-
-      this.logInfo("Starting assistant generation", {
-        threadId: thread.id,
-        sessionKey,
-        toolCount: Object.keys(tools).length,
-        modelMessageCount: modelMessages.length
-      })
-
-      const result = streamText({
-        model,
-        system: buildSystemPrompt(),
-        messages: modelMessages,
-        tools,
-        toolChoice,
-        stopWhen: Object.keys(tools).length > 0 ? stepCountIs(20) : stepCountIs(1)
-      })
-
-      let assistantText = ""
-      let chunkCount = 0
-      const textStream = this.captureTextStream(result.textStream, chunk => {
-        assistantText += chunk
-        chunkCount += 1
-      })
-
-      const streamedMessage = await this.postToThread(thread, textStream, "assistant_stream")
-
-      const normalizedAssistantText = assistantText.trim()
-      if (!normalizedAssistantText) {
-        const fallbackText = "I could not generate a response. Please try again."
-        this.logInfo("Assistant stream finished with empty content, sending fallback", {
-          threadId: thread.id,
-          sessionKey,
-          chunkCount
-        })
-        await this.postToThread(thread, fallbackText, "assistant_empty_fallback")
-        this.setSessionMessages(
-          sessionKey,
-          this.trimSessionMessages([
-            ...messagesWithLatestInput,
-            this.createTextMessage("assistant", fallbackText)
-          ])
-        )
-        return
-      }
-
-      const finalAssistantText = await this.finalizeAssistantMessage(
-        thread,
-        streamedMessage,
-        normalizedAssistantText
-      )
-      const updatedMessages = this.trimSessionMessages([
-        ...messagesWithLatestInput,
-        this.createTextMessage("assistant", finalAssistantText)
-      ])
-      this.setSessionMessages(sessionKey, updatedMessages)
-
-      this.logInfo("Assistant response stored", {
-        threadId: thread.id,
-        sessionKey,
-        chunkCount,
-        outputChars: finalAssistantText.length,
-        contextCount: updatedMessages.length
-      })
-    } catch (error) {
-      console.error("[TelegramBotService] Failed to process message:", error)
-      this.logInfo("Message processing failed", {
-        threadId: thread.id,
-        sessionKey
-      })
-      await this.postToThread(
-        thread,
-        "Error: Failed to generate response. Please try again.",
-        "assistant_error_fallback"
-      )
-    }
-  }
-
-  private async finalizeAssistantMessage(
-    thread: TelegramThread,
-    streamedMessage: SentMessage,
-    normalizedAssistantText: string
-  ): Promise<string> {
-    let transformedText = normalizedAssistantText
-    let uploads: TelegramImageUpload[] = []
-    let warnings: string[] = []
-
-    try {
-      const transformed = await transformTelegramImageMessage(normalizedAssistantText)
-      transformedText = transformed.sanitizedText || normalizedAssistantText
-      uploads = transformed.uploads
-      warnings = transformed.warnings
-    } catch (error) {
-      console.warn("[TelegramBotService] Failed to transform Telegram image markdown:", error)
-    }
-
-    if (warnings.length > 0) {
-      warnings.forEach(warning => {
-        this.logInfo("Telegram image transform warning", {
-          threadId: thread.id,
-          warning
-        })
-      })
-    }
-
-    if (transformedText !== normalizedAssistantText) {
-      try {
-        await streamedMessage.edit(transformedText)
-        this.logInfo("Telegram streamed message edited after local image transform", {
-          threadId: thread.id,
-          uploadCount: uploads.length
-        })
-      } catch (error) {
-        console.warn("[TelegramBotService] Failed to edit streamed Telegram message:", error)
-      }
-    }
-
-    await this.postImageUploads(thread, uploads)
-    return transformedText
-  }
-
-  private async postImageUploads(
-    thread: TelegramThread,
-    uploads: TelegramImageUpload[]
-  ): Promise<void> {
-    if (uploads.length === 0) {
-      return
-    }
-
-    for (const upload of uploads) {
-      try {
-        await this.postToThread(
-          thread,
-          {
-            markdown: upload.caption,
-            files: [
-              {
-                data: upload.data,
-                filename: upload.filename,
-                mimeType: upload.mimeType
-              }
-            ]
-          },
-          "assistant_image_upload"
-        )
-      } catch (error) {
-        console.warn("[TelegramBotService] Failed to upload Telegram image:", error)
-      }
-    }
-  }
-
-  private resolvePayloadMode(payload: string | PostableMessage | AsyncIterable<string>): string {
-    if (typeof payload === "string") {
-      return "text"
-    }
-
-    if (payload && typeof payload === "object" && Symbol.asyncIterator in payload) {
-      return "stream"
-    }
-
-    return "postable"
-  }
-
-  private async postToThread(
-    thread: TelegramThread,
-    payload: string | PostableMessage | AsyncIterable<string>,
-    context: string
-  ): Promise<SentMessage> {
-    const mode = this.resolvePayloadMode(payload)
-    this.logInfo("Telegram send start", {
-      threadId: thread.id,
-      context,
-      mode,
-      textPreview: typeof payload === "string" ? this.toTextPreview(payload) : undefined
-    })
-
-    try {
-      const sentMessage = await thread.post(payload)
-      this.logInfo("Telegram send success", {
-        threadId: thread.id,
-        context,
-        mode
-      })
-      return sentMessage
-    } catch (error) {
-      console.error("[TelegramBotService] Telegram send failed:", error)
-      this.logInfo("Telegram send failed", {
-        threadId: thread.id,
-        context,
-        mode
-      })
-      throw error
-    }
+    return result.result
   }
 
   private createTextMessage(role: "user" | "assistant", text: string): UIMessage {
     return {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       role,
       parts: [
         {
@@ -763,19 +964,8 @@ export class TelegramBotService {
     if (messages.length <= MAX_SESSION_MESSAGES) {
       return messages
     }
-    return messages.slice(messages.length - MAX_SESSION_MESSAGES)
-  }
 
-  private captureTextStream(
-    source: AsyncIterable<string>,
-    onChunk: (chunk: string) => void
-  ): AsyncIterable<string> {
-    return (async function* () {
-      for await (const chunk of source) {
-        onChunk(chunk)
-        yield chunk
-      }
-    })()
+    return messages.slice(messages.length - MAX_SESSION_MESSAGES)
   }
 
   private toSafeToolSessionId(rawSessionKey: string): string {
@@ -792,7 +982,7 @@ export class TelegramBotService {
     this.sessionUpdatedAt.set(sessionKey, Date.now())
   }
 
-  private extractThreadIdFromSessionKey(sessionKey: string): string {
+  private extractChatIdFromSessionKey(sessionKey: string): string {
     return sessionKey.startsWith("telegram:") ? sessionKey.slice("telegram:".length) : sessionKey
   }
 
@@ -805,47 +995,6 @@ export class TelegramBotService {
       .filter(part => part.type === "text")
       .map(part => part.text)
       .join(" ")
-  }
-
-  private extractUpdateId(update: unknown): number | null {
-    if (
-      typeof update === "object" &&
-      update !== null &&
-      "update_id" in update &&
-      typeof (update as { update_id: unknown }).update_id === "number"
-    ) {
-      return (update as { update_id: number }).update_id
-    }
-
-    return null
-  }
-
-  private extractUpdateType(update: unknown): string {
-    if (typeof update !== "object" || update === null) {
-      return "unknown"
-    }
-
-    const updateRecord = update as Record<string, unknown>
-    if ("message" in updateRecord) {
-      return "message"
-    }
-    if ("edited_message" in updateRecord) {
-      return "edited_message"
-    }
-    if ("channel_post" in updateRecord) {
-      return "channel_post"
-    }
-    if ("edited_channel_post" in updateRecord) {
-      return "edited_channel_post"
-    }
-    if ("callback_query" in updateRecord) {
-      return "callback_query"
-    }
-    if ("inline_query" in updateRecord) {
-      return "inline_query"
-    }
-
-    return "unknown"
   }
 
   private toTextPreview(text: string | undefined): string {

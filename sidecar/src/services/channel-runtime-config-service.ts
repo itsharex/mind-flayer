@@ -4,7 +4,8 @@ const DEFAULT_RUNTIME_CONFIG: ChannelRuntimeConfig = {
   selectedModel: null,
   channels: {
     telegram: {
-      enabled: false
+      enabled: false,
+      allowedUserIds: []
     }
   }
 }
@@ -26,7 +27,14 @@ export class ChannelRuntimeConfigService {
         : null,
       channels: {
         telegram: {
-          enabled: nextConfig.channels.telegram.enabled
+          enabled: nextConfig.channels.telegram.enabled,
+          allowedUserIds: Array.from(
+            new Set(
+              nextConfig.channels.telegram.allowedUserIds
+                .map(value => value.trim())
+                .filter(value => value.length > 0)
+            )
+          )
         }
       }
     }
@@ -45,5 +53,9 @@ export class ChannelRuntimeConfigService {
 
   isTelegramEnabled(): boolean {
     return this.config.channels.telegram.enabled
+  }
+
+  getAllowedTelegramUserIds(): string[] {
+    return [...this.config.channels.telegram.allowedUserIds]
   }
 }

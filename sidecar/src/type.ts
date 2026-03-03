@@ -13,6 +13,7 @@ export interface ChannelRuntimeConfig {
   channels: {
     telegram: {
       enabled: boolean
+      allowedUserIds: string[]
     }
   }
 }

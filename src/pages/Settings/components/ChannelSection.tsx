@@ -1,5 +1,5 @@
 import { CheckIcon, Eye, EyeOff, Loader2Icon, Zap } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,7 @@ import {
 import { ProviderLogo } from "@/components/ui/provider-logo"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
 import type { ProviderFormData } from "@/types/settings"
 
@@ -28,6 +29,8 @@ interface ChannelSectionProps {
   activeError: string | null
   enabledChannels: Record<string, boolean>
   setEnabledChannels: (value: Record<string, boolean>) => Promise<void>
+  telegramAllowedUserIds: string[]
+  setTelegramAllowedUserIds: (value: string[]) => Promise<void>
   storedProviders: Record<string, boolean>
   resetSaveFeedback: () => void
   isSaveDisabled: boolean
@@ -47,6 +50,8 @@ export function ChannelSection({
   activeError,
   enabledChannels,
   setEnabledChannels,
+  telegramAllowedUserIds,
+  setTelegramAllowedUserIds,
   storedProviders,
   resetSaveFeedback,
   isSaveDisabled,
@@ -54,7 +59,12 @@ export function ChannelSection({
 }: ChannelSectionProps) {
   const { t } = useTranslation("settings")
   const [showToken, setShowToken] = useState(false)
+  const [allowedUserIdsDraft, setAllowedUserIdsDraft] = useState(telegramAllowedUserIds.join("\n"))
   const data = formData[TELEGRAM_PROVIDER_ID]
+
+  useEffect(() => {
+    setAllowedUserIdsDraft(telegramAllowedUserIds.join("\n"))
+  }, [telegramAllowedUserIds])
 
   return (
     <div className="flex flex-col bg-setting-background-highlight space-y-6 py-6 px-4 rounded-md">
@@ -139,6 +149,30 @@ export function ChannelSection({
             }}
           />
           <FieldDescription>{t("channels.apiBaseUrlOptional")}</FieldDescription>
+        </Field>
+
+        <Field>
+          <FieldLabel htmlFor="telegram-whitelist-users">{t("channels.allowedUserIds")}</FieldLabel>
+          <Textarea
+            id="telegram-whitelist-users"
+            rows={4}
+            placeholder={t("channels.allowedUserIdsPlaceholder")}
+            value={allowedUserIdsDraft}
+            onChange={event => {
+              setAllowedUserIdsDraft(event.target.value)
+            }}
+            onBlur={() => {
+              const parsed = allowedUserIdsDraft
+                .split(/[\n,]/)
+                .map(item => item.trim())
+                .filter(item => item.length > 0)
+                .filter(item => /^\d+$/.test(item))
+
+              resetSaveFeedback()
+              void setTelegramAllowedUserIds(Array.from(new Set(parsed)))
+            }}
+          />
+          <FieldDescription>{t("channels.allowedUserIdsDescription")}</FieldDescription>
         </Field>
 
         <div

@@ -42,6 +42,7 @@ export interface ChannelRuntimeConfigPayload {
   channels: {
     telegram: {
       enabled: boolean
+      allowedUserIds: string[]
     }
   }
 }
@@ -112,7 +113,7 @@ export async function testTelegramConnection(): Promise<TelegramConnectionTestRe
 
 export interface TelegramChannelSessionSummary {
   sessionKey: string
-  threadId: string
+  chatId: string
   updatedAt: number
   messageCount: number
   lastMessageRole: UIMessage["role"] | null
@@ -155,6 +156,17 @@ export interface TelegramChannelSessionMessagesResult {
   messages: UIMessage[]
 }
 
+export interface TelegramWhitelistRequest {
+  requestId: string
+  userId: string
+  chatId: string
+  username?: string
+  firstName?: string
+  lastName?: string
+  requestedAt: number
+  lastMessagePreview: string
+}
+
 export async function getTelegramChannelSessionMessages(
   sessionKey: string
 ): Promise<TelegramChannelSessionMessagesResult> {
@@ -186,6 +198,59 @@ export async function getTelegramChannelSessionMessages(
   return {
     sessionKey: payload.sessionKey,
     messages: payload.messages ?? []
+  }
+}
+
+export async function getTelegramWhitelistRequests(): Promise<TelegramWhitelistRequest[]> {
+  const url = await getSidecarUrl("/api/channels/telegram/whitelist-requests")
+  const response = await fetch(url, {
+    method: "GET"
+  })
+
+  if (!response.ok) {
+    let details = ""
+    try {
+      const data = (await response.json()) as { error?: string }
+      details = data.error || ""
+    } catch {
+      details = await response.text()
+    }
+    throw new Error(details || `Telegram whitelist requests failed (${response.status})`)
+  }
+
+  const payload = (await response.json()) as {
+    success: boolean
+    requests: TelegramWhitelistRequest[]
+  }
+
+  return payload.requests ?? []
+}
+
+export async function decideTelegramWhitelistRequest(
+  requestId: string,
+  decision: "approve" | "reject"
+): Promise<void> {
+  const url = await getSidecarUrl("/api/channels/telegram/whitelist-requests/decision")
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      requestId,
+      decision
+    })
+  })
+
+  if (!response.ok) {
+    let details = ""
+    try {
+      const data = (await response.json()) as { error?: string }
+      details = data.error || ""
+    } catch {
+      details = await response.text()
+    }
+    throw new Error(details || `Telegram whitelist decision failed (${response.status})`)
   }
 }
 

@@ -1,13 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { AppChat } from "@/components/app-chat"
 import { AppSidebar } from "@/components/app-sidebar"
-import { ChannelTelegramDebug } from "@/components/channel-telegram-debug"
+import { ChannelTelegramChat } from "@/components/channel-telegram-chat"
 import { NewChatTrigger } from "@/components/nav-top"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { useChatStorage } from "@/hooks/use-chat-storage"
 import { useLocalShortcut } from "@/hooks/use-local-shortcut"
 import { useSetting } from "@/hooks/use-settings-store"
+import {
+  decideTelegramWhitelistRequest,
+  getTelegramWhitelistRequests,
+  type TelegramWhitelistRequest
+} from "@/lib/sidecar-client"
 import { openSettingsWindow, SettingsSection } from "@/lib/window-manager"
 import type { ChatId } from "@/types/chat"
 import { ShortcutAction } from "@/types/settings"
@@ -17,10 +31,12 @@ const handleOpenSettings = () => {
   openSettingsWindow(SettingsSection.GENERAL)
 }
 
+const TELEGRAM_WHITELIST_POLL_INTERVAL_MS = 2000
 const createNewChatToken = () => globalThis.crypto.randomUUID()
 type ActivePane = "desktop-chat" | "telegram-debug"
 
 export default function Page() {
+  const { t } = useTranslation("common")
   const {
     chats,
     activeChatId,
@@ -36,11 +52,15 @@ export default function Page() {
   const [unreadChatIds, setUnreadChatIds] = useState<Set<ChatId>>(new Set())
   const [replyingChatIds, setReplyingChatIds] = useState<Set<ChatId>>(new Set())
   const [enabledChannels] = useSetting("enabledChannels")
+  const [telegramAllowedUserIds, setTelegramAllowedUserIds] = useSetting("telegramAllowedUserIds")
+  const [whitelistRequests, setWhitelistRequests] = useState<TelegramWhitelistRequest[]>([])
+  const [isDecidingWhitelistRequest, setIsDecidingWhitelistRequest] = useState(false)
   const sidebarActiveChatId = activePane === "desktop-chat" ? activeChatId : null
   const draftStoreRef = useRef<Map<string, string>>(new Map())
   const activePaneRef = useRef<ActivePane>(activePane)
   const activeChatIdRef = useRef(activeChatId)
   const newChatTokenRef = useRef(newChatToken)
+  const telegramAllowedUserIdsRef = useRef(telegramAllowedUserIds)
 
   useEffect(() => {
     activeChatIdRef.current = activeChatId
@@ -49,6 +69,10 @@ export default function Page() {
   useEffect(() => {
     newChatTokenRef.current = newChatToken
   }, [newChatToken])
+
+  useEffect(() => {
+    telegramAllowedUserIdsRef.current = telegramAllowedUserIds
+  }, [telegramAllowedUserIds])
 
   useEffect(() => {
     activePaneRef.current = activePane
@@ -175,6 +199,41 @@ export default function Page() {
     })
   }, [chats])
 
+  useEffect(() => {
+    if (!(enabledChannels.telegram ?? false)) {
+      setWhitelistRequests([])
+      return
+    }
+
+    let cancelled = false
+    let timer: number | null = null
+
+    const refreshWhitelistRequests = async () => {
+      try {
+        const requests = await getTelegramWhitelistRequests()
+        if (!cancelled) {
+          setWhitelistRequests(requests)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("[Home] Failed to poll Telegram whitelist requests:", error)
+        }
+      }
+    }
+
+    void refreshWhitelistRequests()
+    timer = window.setInterval(() => {
+      void refreshWhitelistRequests()
+    }, TELEGRAM_WHITELIST_POLL_INTERVAL_MS)
+
+    return () => {
+      cancelled = true
+      if (timer !== null) {
+        window.clearInterval(timer)
+      }
+    }
+  }, [enabledChannels.telegram])
+
   // Handle search history shortcut (Cmd+F)
   const handleSearchHistory = useCallback(() => {
     // TODO: Implement search history functionality
@@ -186,6 +245,37 @@ export default function Page() {
   useLocalShortcut(ShortcutAction.NEW_CHAT, handleNewChat)
   useLocalShortcut(ShortcutAction.OPEN_SETTINGS, handleOpenSettings)
   useLocalShortcut(ShortcutAction.SEARCH_HISTORY, handleSearchHistory)
+
+  const currentWhitelistRequest = whitelistRequests[0] ?? null
+
+  const handleWhitelistDecision = useCallback(
+    async (decision: "approve" | "reject") => {
+      if (!currentWhitelistRequest || isDecidingWhitelistRequest) {
+        return
+      }
+
+      setIsDecidingWhitelistRequest(true)
+
+      try {
+        await decideTelegramWhitelistRequest(currentWhitelistRequest.requestId, decision)
+
+        if (decision === "approve") {
+          const latestAllowed = telegramAllowedUserIdsRef.current
+          if (!latestAllowed.includes(currentWhitelistRequest.userId)) {
+            await setTelegramAllowedUserIds([...latestAllowed, currentWhitelistRequest.userId])
+          }
+        }
+
+        const requests = await getTelegramWhitelistRequests()
+        setWhitelistRequests(requests)
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to handle whitelist request")
+      } finally {
+        setIsDecidingWhitelistRequest(false)
+      }
+    },
+    [currentWhitelistRequest, isDecidingWhitelistRequest, setTelegramAllowedUserIds]
+  )
 
   return (
     <SidebarProvider className="h-screen overflow-hidden">
@@ -218,7 +308,7 @@ export default function Page() {
       {/* Main content area */}
       <SidebarInset className="overflow-hidden">
         {activePane === "telegram-debug" ? (
-          <ChannelTelegramDebug />
+          <ChannelTelegramChat />
         ) : (
           <AppChat
             activeChatId={activeChatId}
@@ -236,6 +326,59 @@ export default function Page() {
           />
         )}
       </SidebarInset>
+
+      <Dialog open={Boolean(currentWhitelistRequest)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("telegramWhitelist.title")}</DialogTitle>
+            <DialogDescription>{t("telegramWhitelist.description")}</DialogDescription>
+          </DialogHeader>
+
+          {currentWhitelistRequest && (
+            <div className="space-y-2 text-sm">
+              <p>
+                <span className="font-medium">{t("telegramWhitelist.userId")}:</span>{" "}
+                {currentWhitelistRequest.userId}
+              </p>
+              <p>
+                <span className="font-medium">{t("telegramWhitelist.chatId")}:</span>{" "}
+                {currentWhitelistRequest.chatId}
+              </p>
+              {currentWhitelistRequest.username && (
+                <p>
+                  <span className="font-medium">Username:</span> @{currentWhitelistRequest.username}
+                </p>
+              )}
+              {currentWhitelistRequest.firstName && (
+                <p>
+                  <span className="font-medium">Name:</span> {currentWhitelistRequest.firstName}
+                  {currentWhitelistRequest.lastName ? ` ${currentWhitelistRequest.lastName}` : ""}
+                </p>
+              )}
+              <p>
+                <span className="font-medium">{t("telegramWhitelist.preview")}:</span>{" "}
+                {currentWhitelistRequest.lastMessagePreview || "-"}
+              </p>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              disabled={isDecidingWhitelistRequest}
+              onClick={() => void handleWhitelistDecision("reject")}
+            >
+              {t("telegramWhitelist.reject")}
+            </Button>
+            <Button
+              disabled={isDecidingWhitelistRequest}
+              onClick={() => void handleWhitelistDecision("approve")}
+            >
+              {t("telegramWhitelist.approve")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </SidebarProvider>
   )
 }

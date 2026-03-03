@@ -20,7 +20,7 @@ describe("Telegram channel session routes", () => {
       listSessions: vi.fn(() => [
         {
           sessionKey: "telegram:thread-2",
-          threadId: "thread-2",
+          chatId: "thread-2",
           updatedAt: 200,
           messageCount: 3,
           lastMessageRole: "assistant",
@@ -28,7 +28,7 @@ describe("Telegram channel session routes", () => {
         },
         {
           sessionKey: "telegram:thread-1",
-          threadId: "thread-1",
+          chatId: "thread-1",
           updatedAt: 100,
           messageCount: 2,
           lastMessageRole: "user",

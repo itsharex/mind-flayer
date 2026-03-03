@@ -51,7 +51,7 @@
     "neverUpdated": "尚未刷新",
     "lastUpdated": "更新时间 {{time}}",
     "noSessionsSidebar": "暂无 Telegram 会话。",
-    "threadId": "线程 {{threadId}}",
+    "chatId": "会话 {{chatId}}",
     "messageCount": "{{count}} 条",
     "noPreview": "无预览",
     "noSessionsTitle": "暂无 Telegram 会话",
@@ -59,5 +59,14 @@
     "noMessagesTitle": "当前会话暂无消息",
     "noMessagesDescription": "所选会话的消息会显示在这里。",
     "nonTextPlaceholder": "[非文本消息]"
+  },
+  "telegramWhitelist": {
+    "title": "Telegram 加白请求",
+    "description": "有 Telegram 用户正在申请白名单访问。",
+    "userId": "用户 ID",
+    "chatId": "会话 ID",
+    "preview": "最近消息",
+    "approve": "批准",
+    "reject": "拒绝"
   }
 }

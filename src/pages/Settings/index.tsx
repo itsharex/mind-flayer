@@ -48,6 +48,7 @@ export default function Settings() {
   const getConfigRef = useLatest(getConfig)
   const [enabledProviders, setEnabledProviders] = useSetting("enabledProviders")
   const [enabledChannels, setEnabledChannels] = useSetting("enabledChannels")
+  const [telegramAllowedUserIds, setTelegramAllowedUserIds] = useSetting("telegramAllowedUserIds")
 
   const resetSaveFeedback = useCallback(() => {
     setSaveStatus("idle")
@@ -411,6 +412,8 @@ export default function Settings() {
                   activeError={activeError}
                   enabledChannels={enabledChannels}
                   setEnabledChannels={setEnabledChannels}
+                  telegramAllowedUserIds={telegramAllowedUserIds}
+                  setTelegramAllowedUserIds={setTelegramAllowedUserIds}
                   storedProviders={storedProviders}
                   resetSaveFeedback={resetSaveFeedback}
                   isSaveDisabled={isChannelSaveDisabled}

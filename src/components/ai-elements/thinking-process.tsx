@@ -22,13 +22,13 @@ import { Streamdown } from "streamdown"
 import { Shimmer } from "@/components/ai-elements/shimmer"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useThinkingConstants, useToolConstants } from "@/lib/constants"
-import { cn } from "@/lib/utils"
 import {
   getToolInputMeta,
   getToolResultText,
   isToolUIPartInProgress,
   isWebSearchToolUIPart
-} from "~/src/lib/tool-helpers"
+} from "@/lib/tool-helpers"
+import { cn } from "@/lib/utils"
 
 const THINKING_STREAMDOWN_COMPONENTS = {
   img: () => null
