@@ -23,6 +23,7 @@ vi.mock("../../utils/tool-choice", () => ({
 }))
 
 import * as telegramMediaMessageModule from "../../utils/telegram-media-message"
+import { toTelegramHtml } from "../../utils/telegram-rich-text"
 import { ChannelRuntimeConfigService } from "../channel-runtime-config-service"
 import { TelegramBotService } from "../telegram-bot-service"
 
@@ -56,6 +57,44 @@ const telegramApiSuccess = (result: unknown = { message_id: 1 }) =>
       }
     )
   )
+
+const telegramApiFailure = (status: number, description: string) =>
+  Promise.resolve(
+    new Response(
+      JSON.stringify({
+        ok: false,
+        description
+      }),
+      {
+        status,
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    )
+  )
+
+function getMockCallBody(call: readonly unknown[] | undefined): unknown {
+  if (!call || call.length < 2) {
+    return undefined
+  }
+
+  const options = call[1]
+  if (!options || typeof options !== "object") {
+    return undefined
+  }
+
+  return (options as { body?: unknown }).body
+}
+
+function parseMockCallJsonBody<T>(call: readonly unknown[] | undefined): T {
+  const body = getMockCallBody(call)
+  if (typeof body !== "string") {
+    throw new Error("Expected JSON body string in fetch mock call")
+  }
+
+  return JSON.parse(body) as T
+}
 
 describe("TelegramBotService", () => {
   beforeEach(() => {
@@ -467,6 +506,85 @@ describe("TelegramBotService", () => {
     )
   })
 
+  it("sends converted text with HTML parse_mode", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/sendMessageDraft")) {
+        return Promise.resolve(new Response("method not found", { status: 404 }))
+      }
+      return telegramApiSuccess({ message_id: 18 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    streamTextMock.mockReturnValue({
+      textStream: createTextStream("这是 **加粗**\n- 第一项")
+    })
+
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: { provider: "minimax", modelId: "model-a" },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: ["1002"]
+        }
+      }
+    })
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService
+    )
+
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
+      }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 101,
+      chat: {
+        id: 1002,
+        type: "private"
+      },
+      from: {
+        id: 1002,
+        is_bot: false
+      },
+      text: "hello"
+    })
+
+    const sendMessageCall = fetchMock.mock.calls.find(call =>
+      String(call[0]).endsWith("/sendMessage")
+    )
+    expect(sendMessageCall).toBeDefined()
+
+    const body = parseMockCallJsonBody<{
+      parse_mode?: string
+      text?: string
+    }>(sendMessageCall as readonly unknown[] | undefined)
+
+    expect(body.parse_mode).toBe("HTML")
+    expect(body.text).toBe("这是 <b>加粗</b>\n• 第一项")
+  })
+
   it("sends draft_id when calling sendMessageDraft", async () => {
     const fetchMock = vi.fn((url: string, _options?: { body?: unknown }) => {
       if (url.includes("/sendMessageDraft")) {
@@ -559,7 +677,7 @@ describe("TelegramBotService", () => {
             data: Buffer.from([1]),
             filename: "photo.png",
             mimeType: "image/png",
-            caption: "photo"
+            caption: "**photo**"
           },
           {
             kind: "video",
@@ -699,7 +817,110 @@ describe("TelegramBotService", () => {
     expect(voiceActionIndex).toBeLessThan(sendAudioIndex)
     expect(documentActionIndex).toBeLessThan(sendDocumentIndex)
 
+    const photoCall = fetchMock.mock.calls[sendPhotoIndex]
+    const photoBody = getMockCallBody(photoCall as readonly unknown[] | undefined)
+    expect(photoBody instanceof FormData).toBe(true)
+    expect((photoBody as FormData).get("parse_mode")).toBe("HTML")
+    expect((photoBody as FormData).get("caption")).toBe("<b>photo</b>")
+
     transformSpy.mockRestore()
+  })
+
+  it("retries sendMessage without parse_mode when Telegram returns parse entity error", async () => {
+    let sendMessageCallCount = 0
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/sendMessageDraft")) {
+        return telegramApiSuccess(true)
+      }
+
+      if (url.endsWith("/sendMessage")) {
+        sendMessageCallCount += 1
+        if (sendMessageCallCount === 1) {
+          return telegramApiFailure(
+            400,
+            'Bad Request: can\'t parse entities: Unsupported start tag "bad"'
+          )
+        }
+      }
+
+      return telegramApiSuccess({ message_id: 71 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    streamTextMock.mockReturnValue({
+      textStream: createTextStream("**bad** message")
+    })
+
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: { provider: "minimax", modelId: "model-a" },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: ["3005"]
+        }
+      }
+    })
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService
+    )
+
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
+      }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 151,
+      chat: {
+        id: 3005,
+        type: "private"
+      },
+      from: {
+        id: 3005,
+        is_bot: false
+      },
+      text: "hello"
+    })
+
+    const sendMessageCalls = fetchMock.mock.calls.filter(call =>
+      String(call[0]).endsWith("/sendMessage")
+    )
+    expect(sendMessageCalls).toHaveLength(2)
+
+    const firstBody = parseMockCallJsonBody<{
+      parse_mode?: string
+      text?: string
+    }>(sendMessageCalls[0] as readonly unknown[] | undefined)
+    const secondBody = parseMockCallJsonBody<{
+      parse_mode?: string
+      text?: string
+    }>(sendMessageCalls[1] as readonly unknown[] | undefined)
+
+    expect(firstBody.parse_mode).toBe("HTML")
+    expect(firstBody.text).toBe(toTelegramHtml("**bad** message"))
+    expect(secondBody.parse_mode).toBeUndefined()
+    expect(secondBody.text).toBe("**bad** message")
   })
 
   it("continues final reply when sendChatAction fails", async () => {

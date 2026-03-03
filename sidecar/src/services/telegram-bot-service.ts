@@ -7,6 +7,7 @@ import {
   type TelegramMediaUpload,
   transformTelegramMediaMessage
 } from "../utils/telegram-media-message"
+import { toTelegramHtml } from "../utils/telegram-rich-text"
 import { buildToolChoice } from "../utils/tool-choice"
 import type { ChannelRuntimeConfigService } from "./channel-runtime-config-service"
 import type { ProviderService } from "./provider-service"
@@ -799,35 +800,23 @@ export class TelegramBotService {
   }
 
   private async sendMediaUpload(chatId: string, upload: TelegramMediaUpload): Promise<void> {
-    const formData = new FormData()
-    formData.set("chat_id", chatId)
+    const method = this.resolveMediaUploadMethod(upload.kind)
 
-    if (upload.caption) {
-      formData.set("caption", upload.caption)
+    try {
+      await this.callTelegramApi(method, this.createMediaUploadPayload(chatId, upload, true), true)
+    } catch (error) {
+      if (!this.isTelegramEntityParseError(error)) {
+        throw error
+      }
+
+      this.logInfo("Media upload parse_mode HTML failed, retrying plain text caption", {
+        chatId,
+        method,
+        reason: error instanceof Error ? error.message : String(error)
+      })
+
+      await this.callTelegramApi(method, this.createMediaUploadPayload(chatId, upload, false), true)
     }
-
-    const blob = new Blob([new Uint8Array(upload.data)], { type: upload.mimeType })
-
-    if (upload.kind === "photo") {
-      formData.set("photo", blob, upload.filename)
-      await this.callTelegramApi("sendPhoto", formData, true)
-      return
-    }
-
-    if (upload.kind === "video") {
-      formData.set("video", blob, upload.filename)
-      await this.callTelegramApi("sendVideo", formData, true)
-      return
-    }
-
-    if (upload.kind === "audio") {
-      formData.set("audio", blob, upload.filename)
-      await this.callTelegramApi("sendAudio", formData, true)
-      return
-    }
-
-    formData.set("document", blob, upload.filename)
-    await this.callTelegramApi("sendDocument", formData, true)
   }
 
   private async sendTextInChunks(chatId: string, text: string): Promise<void> {
@@ -839,10 +828,70 @@ export class TelegramBotService {
   }
 
   private async sendTextMessage(chatId: string, text: string): Promise<void> {
-    await this.callTelegramApi("sendMessage", {
+    const htmlPayload = {
       chat_id: chatId,
-      text
-    })
+      text: toTelegramHtml(text),
+      parse_mode: "HTML" as const
+    }
+
+    try {
+      await this.callTelegramApi("sendMessage", htmlPayload)
+    } catch (error) {
+      if (!this.isTelegramEntityParseError(error)) {
+        throw error
+      }
+
+      this.logInfo("sendMessage parse_mode HTML failed, retrying plain text", {
+        chatId,
+        reason: error instanceof Error ? error.message : String(error)
+      })
+
+      await this.callTelegramApi("sendMessage", {
+        chat_id: chatId,
+        text
+      })
+    }
+  }
+
+  private resolveMediaUploadMethod(uploadKind: TelegramMediaUpload["kind"]): string {
+    if (uploadKind === "photo") {
+      return "sendPhoto"
+    }
+    if (uploadKind === "video") {
+      return "sendVideo"
+    }
+    if (uploadKind === "audio") {
+      return "sendAudio"
+    }
+    return "sendDocument"
+  }
+
+  private createMediaUploadPayload(
+    chatId: string,
+    upload: TelegramMediaUpload,
+    useHtmlParseMode: boolean
+  ): FormData {
+    const formData = new FormData()
+    formData.set("chat_id", chatId)
+
+    if (useHtmlParseMode) {
+      formData.set("parse_mode", "HTML")
+    }
+
+    if (upload.caption) {
+      formData.set("caption", useHtmlParseMode ? toTelegramHtml(upload.caption) : upload.caption)
+    }
+
+    const blob = new Blob([new Uint8Array(upload.data)], { type: upload.mimeType })
+    const mediaFieldName = upload.kind === "photo" ? "photo" : upload.kind
+    formData.set(mediaFieldName, blob, upload.filename)
+
+    return formData
+  }
+
+  private isTelegramEntityParseError(error: unknown): boolean {
+    const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
+    return message.includes("can't parse entities") || message.includes("parse entities")
   }
 
   private mapUploadKindToChatAction(kind: TelegramMediaUpload["kind"]): TelegramChatAction {
@@ -1091,7 +1140,18 @@ export class TelegramBotService {
     })
 
     if (!response.ok) {
-      throw new Error(`${method} failed with HTTP ${response.status}`)
+      let errorDetail = `HTTP ${response.status}`
+
+      try {
+        const errorPayload = (await response.json()) as Partial<TelegramApiResponse<unknown>>
+        if (typeof errorPayload.description === "string" && errorPayload.description.trim()) {
+          errorDetail = errorPayload.description
+        }
+      } catch {
+        // Ignore JSON parsing errors and keep HTTP status details.
+      }
+
+      throw new Error(`${method} failed: ${errorDetail}`)
     }
 
     const result = (await response.json()) as TelegramApiResponse<T>
