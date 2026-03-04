@@ -522,7 +522,9 @@ describe("TelegramBotService", () => {
     vi.stubGlobal("fetch", fetchMock)
 
     streamTextMock.mockReturnValue({
-      textStream: createTextStream("这是 **加粗**\n- 第一项")
+      textStream: createTextStream(
+        '# 一级标题\n<h2 class="title">二级标题</h2>\n这是 **加粗**\n- 第一项'
+      )
     })
 
     const providerService = {
@@ -588,7 +590,7 @@ describe("TelegramBotService", () => {
     }>(sendMessageCall as readonly unknown[] | undefined)
 
     expect(body.parse_mode).toBe("HTML")
-    expect(body.text).toBe("这是 <b>加粗</b>\n• 第一项")
+    expect(body.text).toBe("<b>一级标题</b>\n<b>二级标题</b>\n这是 <b>加粗</b>\n• 第一项")
   })
 
   it("sends draft_id when calling sendMessageDraft", async () => {

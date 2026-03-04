@@ -13,13 +13,11 @@ import {
   Message,
   MessageBranch,
   MessageBranchContent,
-  MessageContent,
-  MessageResponse
+  MessageContent
 } from "@/components/ai-elements/message"
 import { TopFloatingHeader } from "@/components/top-floating-header"
 import { Button } from "@/components/ui/button"
 import {
-  getSidecarUrl,
   getTelegramChannelSessionMessages,
   getTelegramChannelSessions,
   type TelegramChannelSessionSummary
@@ -37,7 +35,6 @@ export function ChannelTelegramChat() {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null)
-  const [sidecarOrigin, setSidecarOrigin] = useState<string | undefined>(undefined)
 
   const selectedSessionKeyRef = useRef<string | null>(null)
   const sessionsRequestSeqRef = useRef(0)
@@ -48,32 +45,6 @@ export function ChannelTelegramChat() {
   useEffect(() => {
     selectedSessionKeyRef.current = selectedSessionKey
   }, [selectedSessionKey])
-
-  useEffect(() => {
-    let cancelled = false
-
-    void getSidecarUrl("/api/chat")
-      .then(sidecarApi => {
-        if (cancelled) {
-          return
-        }
-
-        try {
-          setSidecarOrigin(new URL(sidecarApi).origin)
-        } catch {
-          setSidecarOrigin(undefined)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSidecarOrigin(undefined)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   const loadMessagesForSession = useCallback(
     async (sessionKey: string) => {
@@ -284,22 +255,15 @@ export function ChannelTelegramChat() {
                     .join("")
                     .trim()
                   const textToRender = messageText || t("channelChat.nonTextPlaceholder")
-                  const isUserMessage = message.role === "user"
 
                   return (
                     <MessageBranch defaultBranch={0} key={message.id}>
                       <MessageBranchContent>
                         <Message from={message.role}>
                           <MessageContent>
-                            {isUserMessage ? (
-                              <div className="whitespace-pre-wrap wrap-break-word">
-                                {textToRender}
-                              </div>
-                            ) : (
-                              <MessageResponse localImageProxyOrigin={sidecarOrigin}>
-                                {textToRender}
-                              </MessageResponse>
-                            )}
+                            <div className="whitespace-pre-wrap wrap-break-word">
+                              {textToRender}
+                            </div>
                           </MessageContent>
                         </Message>
                       </MessageBranchContent>
