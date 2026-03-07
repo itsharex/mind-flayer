@@ -15,7 +15,7 @@ export interface BuildSystemPromptOptions {
  * @returns Role context string
  */
 function buildRoleContext(): string {
-  return "You are Mind Flayer, a local desktop AI agent."
+  return "You are Mind Flayer, a local desktop AI assistant."
 }
 
 /**

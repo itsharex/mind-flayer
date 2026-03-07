@@ -626,6 +626,12 @@ export class TelegramBotService {
       })
       const modelMessages = await processMessages(messagesWithLatestInput, tools)
 
+      console.info("[TelegramBotService] handling message", {
+        chatId,
+        model: `${selectedModel.provider}/${selectedModel.modelId}`,
+        inputMessage: this.toTextPreview(incomingText)
+      })
+
       const result = streamText({
         model,
         system: buildSystemPrompt({
