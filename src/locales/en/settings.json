@@ -68,13 +68,10 @@
       "toggleMainWindow": "Toggle main window",
       "toggleSidebar": "Toggle sidebar",
       "openSettings": "Open settings",
-      "openMiniWindow": "Open mini chat",
-      "screenshotQuestion": "Screenshot question",
       "searchHistory": "Search chat history",
       "sendMessage": "Send message",
       "newLine": "New line while typing",
-      "newChat": "New chat",
-      "history": "Navigate history"
+      "newChat": "New chat"
     }
   },
   "advanced": {},
