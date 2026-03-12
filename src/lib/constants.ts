@@ -42,6 +42,9 @@ export function useToolConstants() {
         emptyFile: t("read.emptyFile"),
         nextOffset: (nextOffset: number) => t("read.nextOffset", { nextOffset })
       },
+      bashExecution: {
+        exitCode: (code: number) => t("bashExecution.exitCode", { code })
+      },
       skillRead: {
         badge: t("skillRead.badge"),
         loaded: (skillName: string) => t("skillRead.loaded", { skillName }),

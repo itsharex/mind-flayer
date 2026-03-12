@@ -117,7 +117,7 @@ export function getToolResultText(
           return webSearch.searchedResults(tool.output.totalResults)
         }
         if (isBashExecutionToolUIPart(tool) && tool.output.exitCode !== undefined) {
-          return `Exited with code ${tool.output.exitCode}`
+          return toolConstants.bashExecution.exitCode(tool.output.exitCode)
         }
         if (isReadToolUIPart(tool) && typeof tool.output.filePath === "string") {
           if (tool.output.displayContext?.kind === "skill") {

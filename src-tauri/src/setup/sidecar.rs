@@ -1,6 +1,7 @@
 use log::{debug, error, info, warn};
 use std::{
     fs,
+    io::{ErrorKind, Write},
     net::TcpListener,
     path::Path,
     sync::{Arc, Mutex},
@@ -150,14 +151,6 @@ fn install_bundled_skills(app_support_dir: &str) -> Result<(), String> {
         for file in skill.files {
             let destination = skills_root.join(skill.name).join(file.relative_path);
 
-            if destination.exists() {
-                debug!(
-                    "Bundled skill file already installed, skipping '{}'",
-                    destination.display()
-                );
-                continue;
-            }
-
             if let Some(parent_dir) = destination.parent() {
                 fs::create_dir_all(parent_dir).map_err(|e| {
                     format!(
@@ -168,15 +161,35 @@ fn install_bundled_skills(app_support_dir: &str) -> Result<(), String> {
                 })?;
             }
 
-            fs::write(&destination, file.contents).map_err(|e| {
-                format!(
-                    "Failed to write bundled skill file '{}': {}",
-                    destination.display(),
-                    e
-                )
-            })?;
-
-            info!("Installed bundled skill file '{}'", destination.display());
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&destination)
+            {
+                Ok(mut output) => {
+                    output.write_all(file.contents.as_bytes()).map_err(|e| {
+                        format!(
+                            "Failed to write bundled skill file '{}': {}",
+                            destination.display(),
+                            e
+                        )
+                    })?;
+                    info!("Installed bundled skill file '{}'", destination.display());
+                }
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                    debug!(
+                        "Bundled skill file already installed, skipping '{}'",
+                        destination.display()
+                    );
+                }
+                Err(error) => {
+                    return Err(format!(
+                        "Failed to create bundled skill file '{}': {}",
+                        destination.display(),
+                        error
+                    ));
+                }
+            }
         }
     }
 
@@ -540,7 +553,26 @@ async fn start_sidecar_internal(
 
     let mut last_error = String::from("Unknown sidecar startup failure");
     let app_support_dir = resolve_sidecar_app_support_dir()?;
-    install_bundled_skills(&app_support_dir)?;
+    match tokio::task::spawn_blocking({
+        let app_support_dir = app_support_dir.clone();
+        move || install_bundled_skills(&app_support_dir)
+    })
+    .await
+    {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            warn!(
+                "Failed to install bundled skills into '{}': {}. Continuing sidecar startup without bundled skills.",
+                app_support_dir, error
+            );
+        }
+        Err(error) => {
+            warn!(
+                "Bundled skill installation task failed for '{}': {}. Continuing sidecar startup without bundled skills.",
+                app_support_dir, error
+            );
+        }
+    }
 
     for attempt in 1..=SIDECAR_START_MAX_ATTEMPTS {
         let use_preferred_port = attempt == 1;

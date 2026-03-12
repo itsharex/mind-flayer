@@ -43,6 +43,7 @@ metadata:
 `
     )
 
+    // Write the same skill twice to verify that the later file contents win.
     await writeSkill(
       join(appSupportDir, "skills"),
       "shared",

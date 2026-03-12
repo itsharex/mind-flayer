@@ -97,21 +97,18 @@ export type ToolCallsContainerTriggerProps = ComponentProps<typeof CollapsibleTr
   getToolsMessage?: (toolCount: number) => ReactNode
 }
 
-const defaultGetToolsMessage = (toolCount: number) => {
-  const { t } = useTranslation("tools")
-  return <span>{t("usedTools", { count: toolCount })}</span>
-}
-
 export const ToolCallsContainerTrigger = memo(
   ({
     className,
     children,
     toolNames = [],
     totalDuration,
-    getToolsMessage = defaultGetToolsMessage,
+    getToolsMessage,
     ...props
   }: ToolCallsContainerTriggerProps) => {
     const { isOpen, toolCount } = useToolCallsContainer()
+    const { t } = useTranslation("tools")
+    const defaultMessage = <span>{t("usedTools", { count: toolCount })}</span>
 
     return (
       <CollapsibleTrigger
@@ -124,7 +121,7 @@ export const ToolCallsContainerTrigger = memo(
         {children ?? (
           <>
             <WrenchIcon className="size-4" />
-            {getToolsMessage(toolCount)}
+            {getToolsMessage ? getToolsMessage(toolCount) : defaultMessage}
             <ChevronRightIcon
               className={cn(
                 "size-3.5 transition-transform opacity-50",

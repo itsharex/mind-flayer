@@ -88,7 +88,13 @@ export async function getSkillFileDisplayContext(
   let resolvedSkillsRoot = skillsRoot
   try {
     resolvedSkillsRoot = await realpath(skillsRoot)
-  } catch {}
+  } catch (error) {
+    console.debug(
+      `[Skills] Failed to resolve skills root '${skillsRoot}', falling back to the configured path: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+  }
 
   const relativePath = relative(resolvedSkillsRoot, filePath)
   if (!relativePath || relativePath.startsWith("..") || isAbsolute(relativePath)) {

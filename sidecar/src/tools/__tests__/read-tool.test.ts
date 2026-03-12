@@ -4,9 +4,14 @@ import { join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { ReadTool, readTool } from "../read"
 
-const TOOL_CONTEXT = {
+type ReadToolExecute = NonNullable<ReturnType<typeof readTool>["execute"]>
+type ReadToolContext = Parameters<ReadToolExecute>[1]
+
+const TOOL_CONTEXT: ReadToolContext = {
+  toolCallId: "test-read-tool-call",
+  messages: [],
   abortSignal: new AbortController().signal
-} as never
+}
 
 type ReadToolResult = {
   filePath: string
@@ -26,12 +31,9 @@ type ReadToolResult = {
 }
 
 const executeReadTool = async (input: { filePath: string; offset: number }) => {
-  const execute = readTool().execute as unknown as (
-    nextInput: { filePath: string; offset: number },
-    context: typeof TOOL_CONTEXT
-  ) => PromiseLike<ReadToolResult> | ReadToolResult
+  const execute = readTool().execute as ReadToolExecute
 
-  return await execute(input, TOOL_CONTEXT)
+  return (await execute(input, TOOL_CONTEXT)) as ReadToolResult
 }
 
 describe("ReadTool", () => {
@@ -78,7 +80,9 @@ describe("ReadTool", () => {
   })
 
   it("should expand ~ to the real home directory", async () => {
-    await expect(executeReadTool({ filePath: "~", offset: 0 })).rejects.toThrow(homedir())
+    await expect(executeReadTool({ filePath: "~", offset: 0 })).rejects.toMatchObject({
+      message: expect.stringContaining(homedir())
+    })
   })
 
   it("should paginate large files", async () => {
