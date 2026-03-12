@@ -1,10 +1,16 @@
 import { useControllableState } from "@radix-ui/react-use-controllable-state"
-import type { ChatAddToolApproveResponseFunction, DynamicToolUIPart, ToolUIPart } from "ai"
+import {
+  type ChatAddToolApproveResponseFunction,
+  type DynamicToolUIPart,
+  getToolName,
+  type ToolUIPart
+} from "ai"
 import {
   ChevronRightIcon,
   LibraryBigIcon,
-  SparklesIcon,
+  PencilRulerIcon,
   TerminalIcon,
+  WandSparklesIcon,
   WrenchIcon
 } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
@@ -168,8 +174,6 @@ export type ToolCallTimelineItemProps = {
   onToolApprovalResponse: ChatAddToolApproveResponseFunction
   duration?: number
 }
-
-const getToolName = (part: ToolUIPart | DynamicToolUIPart) => part.type.replace(/^tool-/, "")
 
 const formatStructuredValue = (value: unknown): string | null => {
   if (value === null || value === undefined) {
@@ -434,10 +438,10 @@ const ToolCallSkillBadge = ({
       className={cn(
         "inline-flex items-center gap-1 rounded-full",
         "px-2 py-1 text-[10px] font-medium",
-        "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 dark:bg-indigo-500/20"
+        "text-indigo-500 dark:text-indigo-300 bg-indigo-500/10 dark:bg-indigo-500/20"
       )}
     >
-      <SparklesIcon className="size-3" />
+      <WandSparklesIcon className="size-3" />
       {skillLabel}
     </span>
     <span className="text-xs font-medium text-foreground">{skillContext.skillName}</span>
@@ -547,7 +551,7 @@ export const ToolCallsSummary = memo(
         )}
         {...props}
       >
-        <WrenchIcon className="size-4" />
+        <PencilRulerIcon className="size-4" />
         <span>{t("usedTools", { count: toolCount })}</span>
       </div>
     )

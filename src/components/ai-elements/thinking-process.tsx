@@ -1,17 +1,20 @@
 import { useControllableState } from "@radix-ui/react-use-controllable-state"
 import {
   type DynamicToolUIPart,
+  getToolName,
   isReasoningUIPart,
   isToolUIPart,
   type ReasoningUIPart,
   type ToolUIPart
 } from "ai"
 import {
+  BookOpenTextIcon,
   BrainIcon,
   ChevronRightIcon,
   CircleCheckIcon,
   CircleIcon,
   GlobeIcon,
+  TerminalIcon,
   WrenchIcon
 } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
@@ -24,6 +27,8 @@ import { useThinkingConstants, useToolConstants } from "@/lib/constants"
 import {
   getToolInputMeta,
   getToolResultText,
+  isBashExecutionToolUIPart,
+  isReadToolUIPart,
   isToolUIPartInProgress,
   isWebSearchToolUIPart
 } from "@/lib/tool-helpers"
@@ -250,11 +255,19 @@ export const ReasoningPartHeader = memo(
     const { names } = useToolConstants()
     const { t } = useTranslation(["chat", "tools"])
     const isWebSearchTool = isToolUIPart(part) && isWebSearchToolUIPart(part)
-    const toolName = isToolUIPart(part) ? part.type.replace(/^tool-/, "") : null
+    const isReadTool = isToolUIPart(part) && isReadToolUIPart(part)
+    const isBashTool = isToolUIPart(part) && isBashExecutionToolUIPart(part)
+    const toolName = isToolUIPart(part) ? getToolName(part) : null
 
     const getIcon = () => {
       if (isWebSearchTool) {
         return <GlobeIcon className="ml-px size-3" />
+      }
+      if (isReadTool) {
+        return <BookOpenTextIcon className="ml-px size-3" />
+      }
+      if (isBashTool) {
+        return <TerminalIcon className="ml-px size-3" />
       }
       if (isToolUIPart(part)) {
         return <WrenchIcon className="ml-px size-3" />
