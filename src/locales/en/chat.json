@@ -63,6 +63,15 @@
     "noModelsConfigured": "No models available",
     "pleaseConfigureApiKey": "Please configure models"
   },
+  "emptyState": {
+    "logoAlt": "Mind Flayer logo",
+    "highlights": {
+      "multiModel": "Models",
+      "skills": "Skills",
+      "tools": "Tools",
+      "channels": "Channels"
+    }
+  },
   "toast": {
     "newChatCreated": "New chat created"
   }

@@ -16,7 +16,7 @@ export function NavChannelDebug({ isActive, onClick }: NavChannelDebugProps) {
   const { t } = useTranslation("common")
 
   return (
-    <SidebarGroup className="pt-0">
+    <SidebarGroup>
       <SidebarMenu>
         <SidebarMenuItem>
           <SidebarMenuButton isActive={isActive} onClick={onClick}>

@@ -78,7 +78,7 @@ export function NavChats({
   return (
     <SidebarGroup>
       <SidebarGroupLabel>{t("nav.recentChats")}</SidebarGroupLabel>
-      <SidebarMenu>
+      <SidebarMenu className="gap-0.5">
         {chats.length === 0 && (
           <div className="px-2 py-4 text-xs text-muted-foreground/50 text-center">
             {t("nav.noChatsYet")}
