@@ -53,10 +53,13 @@ export function AppSidebar({
         <SearchChat />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain onNewChat={onNewChat} />
-        {isTelegramChannelEnabled && onTelegramDebugClick && (
-          <NavChannelDebug isActive={isTelegramDebugActive} onClick={onTelegramDebugClick} />
-        )}
+        <div className="flex flex-col py-3">
+          <NavMain onNewChat={onNewChat} />
+          {isTelegramChannelEnabled && onTelegramDebugClick && (
+            <NavChannelDebug isActive={isTelegramDebugActive} onClick={onTelegramDebugClick} />
+          )}
+        </div>
+
         <NavChats
           chats={chats}
           activeChatId={activeChatId}
