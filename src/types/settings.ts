@@ -53,6 +53,7 @@ export interface AppSettings {
   // Channel settings
   enabledChannels: Record<string, boolean>
   telegramAllowedUserIds: string[]
+  disabledSkills: string[]
 
   // Tool settings
   webSearchEnabled: boolean
@@ -78,6 +79,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     telegram: false
   },
   telegramAllowedUserIds: [],
+  disabledSkills: [],
   webSearchEnabled: true,
   webSearchMode: "auto",
   deepThinkEnabled: true,

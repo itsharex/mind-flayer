@@ -1,13 +1,29 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { afterEach, describe, expect, it, vi } from "vitest"
-import { discoverSkills } from "../catalog"
+import { dirname, join } from "node:path"
+import { afterEach, describe, expect, it } from "vitest"
+import { discoverSkills, getSkillById, getSkillDetailById, uninstallUserSkill } from "../catalog"
 
-async function writeSkill(root: string, relativeDir: string, content: string) {
-  const skillDir = join(root, relativeDir)
+async function writeSkill(
+  appSupportDir: string,
+  sourceDir: "builtin" | "user",
+  relativeDir: string,
+  content: string
+) {
+  const skillDir = join(appSupportDir, "skills", sourceDir, relativeDir)
   await mkdir(skillDir, { recursive: true })
   await writeFile(join(skillDir, "SKILL.md"), content, "utf8")
+}
+
+async function writeSkillAsset(
+  appSupportDir: string,
+  sourceDir: "builtin" | "user",
+  relativePath: string,
+  content: string
+) {
+  const assetPath = join(appSupportDir, "skills", sourceDir, relativePath)
+  await mkdir(dirname(assetPath), { recursive: true })
+  await writeFile(assetPath, content, "utf8")
 }
 
 describe("skills catalog", () => {
@@ -24,32 +40,17 @@ describe("skills catalog", () => {
     }
   })
 
-  it("discovers eligible skills from the app support skills directory", async () => {
+  it("discovers eligible skills from bundled and user skill roots", async () => {
     const appSupportDir = await mkdtemp(join(tmpdir(), "mind-flayer-app-support-"))
     tempDirs.push(appSupportDir)
 
     await writeSkill(
-      join(appSupportDir, "skills"),
-      "shared",
+      appSupportDir,
+      "builtin",
+      "shared-skill",
       `---
 name: shared-skill
-description: global description
-metadata:
-  requires:
-    bins: ["node"]
----
-
-# Shared
-`
-    )
-
-    // Write the same skill twice to verify that the later file contents win.
-    await writeSkill(
-      join(appSupportDir, "skills"),
-      "shared",
-      `---
-name: shared-skill
-description: current description
+description: bundled description
 metadata:
   requires:
     bins:
@@ -62,23 +63,9 @@ metadata:
 
     process.env.MINDFLAYER_SKILL_TEST = "present"
     await writeSkill(
-      join(appSupportDir, "skills"),
-      "filtered",
-      `---
-name: filtered-skill
-description: should be hidden
-metadata:
-  requires:
-    bins: ["definitely-missing-binary"]
----
-
-# Filtered
-`
-    )
-
-    await writeSkill(
-      join(appSupportDir, "skills"),
-      "env",
+      appSupportDir,
+      "builtin",
+      "env-skill",
       `---
 name: env-skill
 description: env gated
@@ -92,17 +79,56 @@ metadata:
 `
     )
 
+    await writeSkill(
+      appSupportDir,
+      "user",
+      "shared-skill",
+      `---
+name: shared-skill
+description: user description
+---
+
+# User Shared
+`
+    )
+
+    await writeSkill(
+      appSupportDir,
+      "user",
+      "filtered",
+      `---
+name: filtered-skill
+description: should be hidden
+metadata:
+  requires:
+    bins: ["definitely-missing-binary"]
+---
+
+# Filtered
+`
+    )
+
     const skills = await discoverSkills({
       appSupportDir
     })
 
-    expect(skills.map(skill => skill.name)).toEqual(["env-skill", "shared-skill"])
-    expect(skills.find(skill => skill.name === "shared-skill")?.description).toBe(
-      "current description"
-    )
-    expect(skills.find(skill => skill.name === "shared-skill")?.location).toBe(
-      `${appSupportDir.replaceAll("\\", "/")}/skills/shared/SKILL.md`
-    )
+    expect(skills.map(skill => skill.id)).toEqual([
+      "bundled:env-skill",
+      "bundled:shared-skill",
+      "user:shared-skill"
+    ])
+    expect(skills.find(skill => skill.id === "bundled:shared-skill")).toMatchObject({
+      source: "bundled",
+      canUninstall: false,
+      description: "bundled description",
+      location: `${appSupportDir.replaceAll("\\", "/")}/skills/builtin/shared-skill/SKILL.md`
+    })
+    expect(skills.find(skill => skill.id === "user:shared-skill")).toMatchObject({
+      source: "user",
+      canUninstall: true,
+      description: "user description",
+      location: `${appSupportDir.replaceAll("\\", "/")}/skills/user/shared-skill/SKILL.md`
+    })
   })
 
   it("returns an empty list when no skills exist", async () => {
@@ -116,13 +142,13 @@ metadata:
     expect(skills).toEqual([])
   })
 
-  it("resolves duplicate skill names deterministically and logs the override", async () => {
+  it("assigns unique ids to same-source skills that share a display name", async () => {
     const appSupportDir = await mkdtemp(join(tmpdir(), "mind-flayer-skills-duplicates-"))
     tempDirs.push(appSupportDir)
-    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
 
     await writeSkill(
-      join(appSupportDir, "skills"),
+      appSupportDir,
+      "builtin",
       "alpha",
       `---
 name: duplicate-skill
@@ -134,7 +160,8 @@ description: alpha description
     )
 
     await writeSkill(
-      join(appSupportDir, "skills"),
+      appSupportDir,
+      "builtin",
       "omega",
       `---
 name: duplicate-skill
@@ -149,12 +176,120 @@ description: omega description
       appSupportDir
     })
 
-    expect(skills).toHaveLength(1)
-    expect(skills[0]?.description).toBe("omega description")
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Duplicate skill 'duplicate-skill'")
+    expect(skills).toHaveLength(2)
+    expect(skills.map(skill => skill.id)).toEqual(["bundled:alpha", "bundled:omega"])
+    expect(skills.map(skill => skill.description)).toEqual([
+      "alpha description",
+      "omega description"
+    ])
+  })
+
+  it("returns detail markdown without frontmatter", async () => {
+    const appSupportDir = await mkdtemp(join(tmpdir(), "mind-flayer-skill-detail-"))
+    tempDirs.push(appSupportDir)
+
+    await writeSkill(
+      appSupportDir,
+      "builtin",
+      "detail-skill",
+      `---
+name: detail-skill
+description: detail description
+---
+
+# Detail
+
+Body content
+`
     )
 
-    consoleWarnSpy.mockRestore()
+    const detail = await getSkillDetailById("bundled:detail-skill", {
+      appSupportDir
+    })
+
+    expect(detail?.bodyMarkdown).toBe("# Detail\n\nBody content")
+    expect(detail?.source).toBe("bundled")
+  })
+
+  it("resolves explicit and default skill icons", async () => {
+    const appSupportDir = await mkdtemp(join(tmpdir(), "mind-flayer-skill-icons-"))
+    tempDirs.push(appSupportDir)
+
+    await writeSkill(
+      appSupportDir,
+      "builtin",
+      "explicit-icon",
+      `---
+name: explicit-icon
+description: explicit icon description
+metadata:
+  icon: assets/brand.svg
+---
+
+# Explicit
+`
+    )
+    await writeSkillAsset(
+      appSupportDir,
+      "builtin",
+      "explicit-icon/assets/brand.svg",
+      '<svg xmlns="http://www.w3.org/2000/svg" />'
+    )
+
+    await writeSkill(
+      appSupportDir,
+      "builtin",
+      "default-icon",
+      `---
+name: default-icon
+description: default icon description
+---
+
+# Default
+`
+    )
+    await writeSkillAsset(
+      appSupportDir,
+      "builtin",
+      "default-icon/assets/icon.svg",
+      '<svg xmlns="http://www.w3.org/2000/svg" />'
+    )
+
+    const skills = await discoverSkills({ appSupportDir })
+
+    expect(skills.find(skill => skill.id === "bundled:explicit-icon")).toMatchObject({
+      iconPath: join(appSupportDir, "skills", "builtin", "explicit-icon", "assets", "brand.svg")
+    })
+    expect(skills.find(skill => skill.id === "bundled:default-icon")).toMatchObject({
+      iconPath: join(appSupportDir, "skills", "builtin", "default-icon", "assets", "icon.svg")
+    })
+  })
+
+  it("refuses to uninstall the user skills root itself", async () => {
+    const appSupportDir = await mkdtemp(join(tmpdir(), "mind-flayer-user-root-skill-"))
+    tempDirs.push(appSupportDir)
+
+    await mkdir(join(appSupportDir, "skills", "user"), { recursive: true })
+    await writeFile(
+      join(appSupportDir, "skills", "user", "SKILL.md"),
+      `---
+name: root-skill
+description: root description
+---
+
+Root
+`,
+      "utf8"
+    )
+
+    const skill = await getSkillById("user:__root__", { appSupportDir })
+
+    expect(skill).not.toBeNull()
+    if (!skill) {
+      throw new Error("Expected the root skill to be discovered")
+    }
+    await expect(uninstallUserSkill(skill, { appSupportDir })).rejects.toThrow(
+      "Refusing to uninstall the user skills root itself"
+    )
   })
 })

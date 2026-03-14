@@ -1,8 +1,9 @@
 {
   "nav": {
     "newChat": "New Chat",
-    "channelSessions": "Channel Sessions",
-    "recentChats": "Recent Chats",
+    "skills": "Skills",
+    "channelSessions": "Channels",
+    "recentChats": "Chats",
     "noChatsYet": "No chats yet. Start a new chat!",
     "showMore": "Show more",
     "showLess": "Show less",
@@ -30,6 +31,12 @@
     "filesAttached": "Files attached",
     "filesAttachedDescription": "{{count}} file(s) attached to message",
     "apiKeyNotConfigured": "Please configure your API key in Settings to continue chatting."
+  },
+  "dialog": {
+    "close": "Close"
+  },
+  "runtimeConfig": {
+    "syncError": "Failed to sync the latest runtime settings. The local change was reverted."
   },
   "sidebar": {
     "search": "Search",
@@ -59,6 +66,34 @@
     "noMessagesTitle": "No messages in this session",
     "noMessagesDescription": "Messages for the selected session will appear here.",
     "nonTextPlaceholder": "[non-text message]"
+  },
+  "skills": {
+    "title": "Skills",
+    "summary": "Manage available skills",
+    "refresh": "Refresh",
+    "loadError": "Failed to load skills.",
+    "detailLoadError": "Failed to load skill details.",
+    "bundledSectionTitle": "Built-in",
+    "bundledSectionDescription": "Installed with the app. These skills can be enabled or disabled.",
+    "userSectionTitle": "User-installed",
+    "userSectionDescription": "Installed by the user. These skills can be enabled, disabled, or uninstalled.",
+    "emptyBundled": "No built-in skills are available.",
+    "emptyUser": "No user-installed skills yet.",
+    "openFolder": "Open Folder",
+    "openDetails": "Open details for {{name}}",
+    "moreActions": "More actions for {{name}}",
+    "enableDisable": "Enable or disable {{name}}",
+    "openFolderError": "Failed to open the folder.",
+    "disabledBadge": "Disabled",
+    "contentTitle": "Skill Content",
+    "uninstall": "Uninstall",
+    "uninstalling": "Uninstalling",
+    "cancel": "Cancel",
+    "uninstallTitle": "Uninstall Skill",
+    "uninstallDescription": "Remove {{skillName}} from this device?",
+    "uninstallSuccess": "{{skillName}} was uninstalled.",
+    "uninstallError": "Failed to uninstall the selected skill.",
+    "toggleError": "Failed to update the selected skill."
   },
   "telegramWhitelist": {
     "title": "Telegram Join Request",

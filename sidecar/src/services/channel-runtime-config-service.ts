@@ -7,7 +7,8 @@ const DEFAULT_RUNTIME_CONFIG: ChannelRuntimeConfig = {
       enabled: false,
       allowedUserIds: []
     }
-  }
+  },
+  disabledSkills: []
 }
 
 /**
@@ -17,7 +18,11 @@ const DEFAULT_RUNTIME_CONFIG: ChannelRuntimeConfig = {
 export class ChannelRuntimeConfigService {
   private config: ChannelRuntimeConfig = structuredClone(DEFAULT_RUNTIME_CONFIG)
 
-  update(nextConfig: ChannelRuntimeConfig): void {
+  update(
+    nextConfig: Omit<ChannelRuntimeConfig, "disabledSkills"> & { disabledSkills?: string[] }
+  ): void {
+    const disabledSkills = nextConfig.disabledSkills ?? this.config.disabledSkills ?? []
+
     this.config = {
       selectedModel: nextConfig.selectedModel
         ? {
@@ -36,7 +41,10 @@ export class ChannelRuntimeConfigService {
             )
           )
         }
-      }
+      },
+      disabledSkills: Array.from(
+        new Set(disabledSkills.map(value => value.trim()).filter(value => value.length > 0))
+      )
     }
   }
 
@@ -57,5 +65,9 @@ export class ChannelRuntimeConfigService {
 
   getAllowedTelegramUserIds(): string[] {
     return [...this.config.channels.telegram.allowedUserIds]
+  }
+
+  getDisabledSkillIds(): string[] {
+    return [...this.config.disabledSkills]
   }
 }

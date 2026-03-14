@@ -5,6 +5,7 @@ import { AppChat } from "@/components/app-chat"
 import { AppSidebar } from "@/components/app-sidebar"
 import { ChannelTelegramChat } from "@/components/channel-telegram-chat"
 import { NewChatTrigger } from "@/components/nav-top"
+import { SkillsPane } from "@/components/skills-pane"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -14,12 +15,15 @@ import {
   DialogTitle
 } from "@/components/ui/dialog"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { useAvailableModels } from "@/hooks/use-available-models"
 import { useChatStorage } from "@/hooks/use-chat-storage"
 import { useLocalShortcut } from "@/hooks/use-local-shortcut"
 import { useSetting } from "@/hooks/use-settings-store"
 import {
   decideTelegramWhitelistRequest,
   getTelegramWhitelistRequests,
+  type RuntimeConfigPayload,
+  syncRuntimeConfig,
   type TelegramWhitelistRequest
 } from "@/lib/sidecar-client"
 import { cn } from "@/lib/utils"
@@ -34,7 +38,81 @@ const handleOpenSettings = () => {
 
 const TELEGRAM_WHITELIST_POLL_INTERVAL_MS = 2000
 const createNewChatToken = () => globalThis.crypto.randomUUID()
-type ActivePane = "desktop-chat" | "telegram-debug"
+type ActivePane = "desktop-chat" | "skills" | "telegram-debug"
+
+interface RuntimeConfigSettingsSnapshot {
+  selectedModelApiId?: string
+  enabledChannels: Record<string, boolean>
+  telegramAllowedUserIds: string[]
+  disabledSkills: string[]
+}
+
+function createRuntimeConfigSettingsSnapshot(
+  selectedModelApiId: string | undefined,
+  enabledChannels: Record<string, boolean>,
+  telegramAllowedUserIds: string[],
+  disabledSkills: string[]
+): RuntimeConfigSettingsSnapshot {
+  return {
+    selectedModelApiId,
+    enabledChannels: { ...enabledChannels },
+    telegramAllowedUserIds: [...telegramAllowedUserIds],
+    disabledSkills: [...disabledSkills]
+  }
+}
+
+function createRuntimeConfigPayload(
+  settingsSnapshot: RuntimeConfigSettingsSnapshot,
+  selectedModelProvider: string | null,
+  selectedModelId: string | null
+): RuntimeConfigPayload {
+  return {
+    selectedModel:
+      selectedModelProvider && selectedModelId
+        ? {
+            provider: selectedModelProvider,
+            modelId: selectedModelId
+          }
+        : null,
+    channels: {
+      telegram: {
+        enabled: settingsSnapshot.enabledChannels.telegram ?? false,
+        allowedUserIds: settingsSnapshot.telegramAllowedUserIds
+      }
+    },
+    disabledSkills: settingsSnapshot.disabledSkills
+  }
+}
+
+function arraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function booleanRecordEqual(
+  left: Record<string, boolean>,
+  right: Record<string, boolean>
+): boolean {
+  const leftKeys = Object.keys(left).sort()
+  const rightKeys = Object.keys(right).sort()
+
+  if (!arraysEqual(leftKeys, rightKeys)) {
+    return false
+  }
+
+  return leftKeys.every(key => left[key] === right[key])
+}
+
+function runtimeConfigSettingsEqual(
+  left: RuntimeConfigSettingsSnapshot,
+  right: RuntimeConfigSettingsSnapshot
+): boolean {
+  return (
+    left.selectedModelApiId === right.selectedModelApiId &&
+    booleanRecordEqual(left.enabledChannels, right.enabledChannels) &&
+    arraysEqual(left.telegramAllowedUserIds, right.telegramAllowedUserIds) &&
+    arraysEqual(left.disabledSkills, right.disabledSkills)
+  )
+}
 
 export default function Page() {
   const { t } = useTranslation("common")
@@ -48,12 +126,15 @@ export default function Page() {
     saveChatAllMessages,
     updateChatTitle
   } = useChatStorage()
+  const { availableModels } = useAvailableModels()
   const [newChatToken, setNewChatToken] = useState(createNewChatToken)
   const [activePane, setActivePane] = useState<ActivePane>("desktop-chat")
   const [unreadChatIds, setUnreadChatIds] = useState<Set<ChatId>>(new Set())
   const [replyingChatIds, setReplyingChatIds] = useState<Set<ChatId>>(new Set())
-  const [enabledChannels] = useSetting("enabledChannels")
+  const [selectedModelApiId, setSelectedModelApiId] = useSetting("selectedModelApiId")
+  const [enabledChannels, setEnabledChannels] = useSetting("enabledChannels")
   const [telegramAllowedUserIds, setTelegramAllowedUserIds] = useSetting("telegramAllowedUserIds")
+  const [disabledSkills, setDisabledSkills] = useSetting("disabledSkills")
   const [whitelistRequests, setWhitelistRequests] = useState<TelegramWhitelistRequest[]>([])
   const [isDecidingWhitelistRequest, setIsDecidingWhitelistRequest] = useState(false)
   const sidebarActiveChatId = activePane === "desktop-chat" ? activeChatId : null
@@ -62,6 +143,13 @@ export default function Page() {
   const activeChatIdRef = useRef(activeChatId)
   const newChatTokenRef = useRef(newChatToken)
   const telegramAllowedUserIdsRef = useRef(telegramAllowedUserIds)
+  const runtimeConfigSyncQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const latestRuntimeConfigSyncIdRef = useRef(0)
+  const lastAppliedRuntimeConfigRef = useRef<RuntimeConfigSettingsSnapshot | null>(null)
+  const selectedModel =
+    availableModels.find(model => model.api_id === selectedModelApiId) ?? availableModels[0] ?? null
+  const selectedModelProvider = selectedModel?.provider ?? null
+  const selectedModelId = selectedModel?.api_id ?? null
 
   useEffect(() => {
     activeChatIdRef.current = activeChatId
@@ -78,6 +166,90 @@ export default function Page() {
   useEffect(() => {
     activePaneRef.current = activePane
   }, [activePane])
+
+  const restoreRuntimeConfigSnapshot = useCallback(
+    async (snapshot: RuntimeConfigSettingsSnapshot) => {
+      await Promise.all([
+        setSelectedModelApiId(snapshot.selectedModelApiId),
+        setEnabledChannels(snapshot.enabledChannels),
+        setTelegramAllowedUserIds(snapshot.telegramAllowedUserIds),
+        setDisabledSkills(snapshot.disabledSkills)
+      ])
+    },
+    [setDisabledSkills, setEnabledChannels, setSelectedModelApiId, setTelegramAllowedUserIds]
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    const syncId = latestRuntimeConfigSyncIdRef.current + 1
+    latestRuntimeConfigSyncIdRef.current = syncId
+
+    const settingsSnapshot = createRuntimeConfigSettingsSnapshot(
+      selectedModelApiId,
+      enabledChannels,
+      telegramAllowedUserIds,
+      disabledSkills
+    )
+    const payload = createRuntimeConfigPayload(
+      settingsSnapshot,
+      selectedModelProvider,
+      selectedModelId
+    )
+
+    runtimeConfigSyncQueueRef.current = runtimeConfigSyncQueueRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        if (cancelled || syncId !== latestRuntimeConfigSyncIdRef.current) {
+          return
+        }
+
+        await syncRuntimeConfig(payload)
+        lastAppliedRuntimeConfigRef.current = settingsSnapshot
+      })
+      .catch(async error => {
+        if (cancelled || syncId !== latestRuntimeConfigSyncIdRef.current) {
+          return
+        }
+
+        console.warn("[Home] Failed to sync runtime config:", error)
+        const lastAppliedRuntimeConfig = lastAppliedRuntimeConfigRef.current
+        const shouldRollback =
+          lastAppliedRuntimeConfig &&
+          !runtimeConfigSettingsEqual(lastAppliedRuntimeConfig, settingsSnapshot)
+
+        if (!lastAppliedRuntimeConfig) {
+          toast.error(t("toast.error"), {
+            id: "runtime-config-sync-error",
+            description: t("runtimeConfig.syncError")
+          })
+          return
+        }
+
+        if (!shouldRollback) {
+          return
+        }
+
+        toast.error(t("toast.error"), {
+          id: "runtime-config-sync-error",
+          description: t("runtimeConfig.syncError")
+        })
+
+        await restoreRuntimeConfigSnapshot(lastAppliedRuntimeConfig)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    disabledSkills,
+    enabledChannels,
+    restoreRuntimeConfigSnapshot,
+    selectedModelApiId,
+    selectedModelId,
+    selectedModelProvider,
+    t,
+    telegramAllowedUserIds
+  ])
 
   const handleNewChat = useCallback(() => {
     setActivePane("desktop-chat")
@@ -103,6 +275,10 @@ export default function Page() {
 
   const handleOpenTelegramDebug = useCallback(() => {
     setActivePane("telegram-debug")
+  }, [])
+
+  const handleOpenSkills = useCallback(() => {
+    setActivePane("skills")
   }, [])
 
   const isDesktopChatPaneActive = useCallback(() => {
@@ -289,6 +465,8 @@ export default function Page() {
         onChatClick={handleChatClick}
         onDeleteChat={deleteChat}
         onNewChat={handleNewChat}
+        isSkillsActive={activePane === "skills"}
+        onSkillsClick={handleOpenSkills}
         isTelegramChannelEnabled={enabledChannels.telegram ?? false}
         isTelegramDebugActive={activePane === "telegram-debug"}
         onTelegramDebugClick={handleOpenTelegramDebug}
@@ -314,6 +492,8 @@ export default function Page() {
       <SidebarInset className="overflow-hidden">
         {activePane === "telegram-debug" ? (
           <ChannelTelegramChat />
+        ) : activePane === "skills" ? (
+          <SkillsPane disabledSkillIds={disabledSkills} setDisabledSkillIds={setDisabledSkills} />
         ) : (
           <AppChat
             activeChatId={activeChatId}
