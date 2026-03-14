@@ -66,6 +66,7 @@ import {
   ToolCallsSummary,
   ToolCallTimelineItem
 } from "@/components/ai-elements/tool-calls-container"
+import { NewChatEmptyState } from "@/components/new-chat-empty-state"
 import { SelectModel } from "@/components/select-model"
 import { ToolButton } from "@/components/tool-button"
 import { TopFloatingHeader } from "@/components/top-floating-header"
@@ -1187,6 +1188,7 @@ const AppChatInner = ({
   const isStreaming = status === "streaming"
   const isSubmitDisabled = isStreaming ? false : !input.trim() || status !== "ready"
   const submitTooltip = isStreaming ? tooltipConstants.stop : tooltipConstants.submit
+  const showIntroEmptyState = !activeChatId && messages.length === 0 && status === "ready"
 
   const lastMessage = messages[messages.length - 1]
   const isAwaitingAssistantReply =
@@ -1219,171 +1221,178 @@ const AppChatInner = ({
       {/* Middle */}
       <div className="flex-1 min-h-0">
         <Conversation className="h-full" contextRef={conversationContextRef}>
-          <ConversationContent>
-            {messages.map((message, index) => {
-              const messageText = message.parts
-                .filter(isTextUIPart)
-                .map(part => part.text)
-                .join("")
-              const metadata = message.metadata as AssistantMessageMetadata | undefined
-              const messageModelPricing = findModelPricing(
-                metadata?.modelProvider,
-                metadata?.modelId
-              )
-              const isLastMessage = index === messages.length - 1
-              const isCurrentlyStreaming = status === "streaming" && isLastMessage
-              const lastPart = message.parts[message.parts.length - 1]
-              const isThinkingStreaming =
-                (isCurrentlyStreaming &&
-                  lastPart?.type &&
-                  (lastPart.type === "step-start" ||
-                    isReasoningUIPart(lastPart) ||
-                    isToolUIPart(lastPart))) ||
-                (!isCurrentlyStreaming && lastPart?.type && isToolUIPart(lastPart))
-              const steps: ThinkingStep[][] = []
-              let currentStep: ThinkingStep[] = []
+          <ConversationContent className={cn(showIntroEmptyState && "min-h-full justify-center")}>
+            {showIntroEmptyState ? (
+              <NewChatEmptyState />
+            ) : (
+              messages.map((message, index) => {
+                const messageText = message.parts
+                  .filter(isTextUIPart)
+                  .map(part => part.text)
+                  .join("")
+                const metadata = message.metadata as AssistantMessageMetadata | undefined
+                const messageModelPricing = findModelPricing(
+                  metadata?.modelProvider,
+                  metadata?.modelId
+                )
+                const isLastMessage = index === messages.length - 1
+                const isCurrentlyStreaming = status === "streaming" && isLastMessage
+                const lastPart = message.parts[message.parts.length - 1]
+                const isThinkingStreaming =
+                  (isCurrentlyStreaming &&
+                    lastPart?.type &&
+                    (lastPart.type === "step-start" ||
+                      isReasoningUIPart(lastPart) ||
+                      isToolUIPart(lastPart))) ||
+                  (!isCurrentlyStreaming && lastPart?.type && isToolUIPart(lastPart))
+                const steps: ThinkingStep[][] = []
+                let currentStep: ThinkingStep[] = []
 
-              message.parts.forEach((part, partIndex) => {
-                if (part.type === "step-start") {
-                  if (currentStep.length > 0) {
-                    steps.push(currentStep)
-                    currentStep = [{ ...part, partIndex }]
+                message.parts.forEach((part, partIndex) => {
+                  if (part.type === "step-start") {
+                    if (currentStep.length > 0) {
+                      steps.push(currentStep)
+                      currentStep = [{ ...part, partIndex }]
+                    }
+                  } else if (isReasoningUIPart(part) || isToolUIPart(part)) {
+                    currentStep.push({ ...part, partIndex })
                   }
-                } else if (isReasoningUIPart(part) || isToolUIPart(part)) {
-                  currentStep.push({ ...part, partIndex })
+                })
+
+                if (currentStep.length > 0) {
+                  steps.push(currentStep)
                 }
-              })
 
-              if (currentStep.length > 0) {
-                steps.push(currentStep)
-              }
+                const hasThinkingProcess =
+                  steps.length > 0 &&
+                  steps.some(step =>
+                    step.some(part => isReasoningUIPart(part) || isToolUIPart(part))
+                  )
+                const lastStep = currentStep.at(-1)
+                const isThinkingComplete =
+                  lastStep && isReasoningUIPart(lastStep) && lastStep.state !== "streaming"
+                const toolParts = message.parts.filter(isToolUIPart)
+                const messageToolDurations =
+                  metadata?.toolDurations ?? toolDurations?.get(message.id)
+                const timelineParts = steps.flatMap(step =>
+                  step.filter(part => isReasoningUIPart(part) || isToolUIPart(part))
+                )
 
-              const hasThinkingProcess =
-                steps.length > 0 &&
-                steps.some(step => step.some(part => isReasoningUIPart(part) || isToolUIPart(part)))
-              const lastStep = currentStep.at(-1)
-              const isThinkingComplete =
-                lastStep && isReasoningUIPart(lastStep) && lastStep.state !== "streaming"
-              const toolParts = message.parts.filter(isToolUIPart)
-              const messageToolDurations = metadata?.toolDurations ?? toolDurations?.get(message.id)
-              const timelineParts = steps.flatMap(step =>
-                step.filter(part => isReasoningUIPart(part) || isToolUIPart(part))
-              )
+                const hasTools = toolParts.length > 0
+                const isUserMessage = message.role === "user"
+                const isAssistantMessage = message.role === "assistant"
 
-              const hasTools = toolParts.length > 0
-              const isUserMessage = message.role === "user"
-              const isAssistantMessage = message.role === "assistant"
-
-              return (
-                <MessageBranch defaultBranch={0} key={message.id}>
-                  <MessageBranchContent>
-                    <Message
-                      from={message.role}
-                      key={message.id}
-                      ref={getMessageNodeRef(message.id, message.role)}
-                    >
-                      {isAssistantMessage && hasThinkingProcess && (
-                        <ThinkingProcess
-                          isStreaming={isThinkingStreaming}
-                          defaultOpen={isThinkingStreaming}
-                          totalDuration={
-                            metadata?.thinkingDuration ?? thinkingDurations?.get(message.id)
-                          }
-                        >
-                          <ThinkingProcessTrigger />
-                          <ThinkingProcessContent>
-                            {timelineParts.map(part =>
-                              isToolUIPart(part) ? (
-                                <div key={`${message.id}-${part.partIndex}`}>
+                return (
+                  <MessageBranch defaultBranch={0} key={message.id}>
+                    <MessageBranchContent>
+                      <Message
+                        from={message.role}
+                        key={message.id}
+                        ref={getMessageNodeRef(message.id, message.role)}
+                      >
+                        {isAssistantMessage && hasThinkingProcess && (
+                          <ThinkingProcess
+                            isStreaming={isThinkingStreaming}
+                            defaultOpen={isThinkingStreaming}
+                            totalDuration={
+                              metadata?.thinkingDuration ?? thinkingDurations?.get(message.id)
+                            }
+                          >
+                            <ThinkingProcessTrigger />
+                            <ThinkingProcessContent>
+                              {timelineParts.map(part =>
+                                isToolUIPart(part) ? (
+                                  <div key={`${message.id}-${part.partIndex}`}>
+                                    <ReasoningPart
+                                      partSource={part}
+                                      isChatStreaming={isCurrentlyStreaming}
+                                    />
+                                    <div className="mt-2.5">
+                                      <ToolCallTimelineItem
+                                        part={part}
+                                        duration={messageToolDurations?.[part.toolCallId]}
+                                        onToolApprovalResponse={addToolApprovalResponse}
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
                                   <ReasoningPart
+                                    key={`${message.id}-${part.partIndex}`}
                                     partSource={part}
                                     isChatStreaming={isCurrentlyStreaming}
                                   />
-                                  <div className="mt-2.5">
-                                    <ToolCallTimelineItem
-                                      part={part}
-                                      duration={messageToolDurations?.[part.toolCallId]}
-                                      onToolApprovalResponse={addToolApprovalResponse}
-                                    />
+                                )
+                              )}
+
+                              {isThinkingComplete ? (
+                                <ThinkingProcessCompletion stepCount={steps.length} />
+                              ) : (
+                                <div className="relative my-0">
+                                  <div className="flex items-center gap-2 text-xs text-muted-foreground relative my-2">
+                                    <CircleIcon className="ml-1 size-1.5 text-muted-foreground/80 fill-current" />
+                                    <Shimmer duration={1}>
+                                      {t("chat:message.thinkingInProgress")}
+                                    </Shimmer>
                                   </div>
                                 </div>
-                              ) : (
-                                <ReasoningPart
-                                  key={`${message.id}-${part.partIndex}`}
-                                  partSource={part}
-                                  isChatStreaming={isCurrentlyStreaming}
-                                />
-                              )
-                            )}
-
-                            {isThinkingComplete ? (
-                              <ThinkingProcessCompletion stepCount={steps.length} />
-                            ) : (
-                              <div className="relative my-0">
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground relative my-2">
-                                  <CircleIcon className="ml-1 size-1.5 text-muted-foreground/80 fill-current" />
-                                  <Shimmer duration={1}>
-                                    {t("chat:message.thinkingInProgress")}
-                                  </Shimmer>
-                                </div>
-                              </div>
-                            )}
-                          </ThinkingProcessContent>
-                        </ThinkingProcess>
-                      )}
-
-                      {isAssistantMessage && hasTools && isThinkingComplete && (
-                        <ToolCallsSummary toolCount={toolParts.length} />
-                      )}
-
-                      <MessageContent>
-                        {isUserMessage ? (
-                          <div className="whitespace-pre-wrap wrap-break-word">{messageText}</div>
-                        ) : (
-                          <MessageResponse localImageProxyOrigin={sidecarOrigin}>
-                            {messageText}
-                          </MessageResponse>
+                              )}
+                            </ThinkingProcessContent>
+                          </ThinkingProcess>
                         )}
-                      </MessageContent>
-                      {isUserMessage && (
-                        <UserMessageActionsBar
-                          messageText={messageText}
-                          onEdit={() => {
-                            /** noop */
-                          }}
-                        />
-                      )}
-                      {isAssistantMessage &&
-                        !isCurrentlyStreaming &&
-                        !message.parts.some(
-                          part => isToolUIPart(part) && part.state === "approval-requested"
-                        ) && (
-                          <AssistantMessageActionsBar
+
+                        {isAssistantMessage && hasTools && isThinkingComplete && (
+                          <ToolCallsSummary toolCount={toolParts.length} />
+                        )}
+
+                        <MessageContent>
+                          {isUserMessage ? (
+                            <div className="whitespace-pre-wrap wrap-break-word">{messageText}</div>
+                          ) : (
+                            <MessageResponse localImageProxyOrigin={sidecarOrigin}>
+                              {messageText}
+                            </MessageResponse>
+                          )}
+                        </MessageContent>
+                        {isUserMessage && (
+                          <UserMessageActionsBar
                             messageText={messageText}
-                            tokenInfo={metadata?.totalUsage}
-                            modelProvider={metadata?.modelProvider}
-                            modelId={metadata?.modelId}
-                            modelPricing={messageModelPricing}
-                            onLike={() => {
+                            onEdit={() => {
                               /** noop */
                             }}
-                            onDislike={() => {
-                              /** noop */
-                            }}
-                            onShare={() => {
-                              /** noop */
-                            }}
-                            onRefresh={() => {
-                              void regenerate({ messageId: message.id })
-                            }}
-                            showRefresh={isLastMessage}
                           />
                         )}
-                    </Message>
-                  </MessageBranchContent>
-                </MessageBranch>
-              )
-            })}
+                        {isAssistantMessage &&
+                          !isCurrentlyStreaming &&
+                          !message.parts.some(
+                            part => isToolUIPart(part) && part.state === "approval-requested"
+                          ) && (
+                            <AssistantMessageActionsBar
+                              messageText={messageText}
+                              tokenInfo={metadata?.totalUsage}
+                              modelProvider={metadata?.modelProvider}
+                              modelId={metadata?.modelId}
+                              modelPricing={messageModelPricing}
+                              onLike={() => {
+                                /** noop */
+                              }}
+                              onDislike={() => {
+                                /** noop */
+                              }}
+                              onShare={() => {
+                                /** noop */
+                              }}
+                              onRefresh={() => {
+                                void regenerate({ messageId: message.id })
+                              }}
+                              showRefresh={isLastMessage}
+                            />
+                          )}
+                      </Message>
+                    </MessageBranchContent>
+                  </MessageBranch>
+                )
+              })
+            )}
 
             {isAwaitingAssistantReply && (
               <MessageBranch defaultBranch={0}>
@@ -1399,12 +1408,14 @@ const AppChatInner = ({
               </MessageBranch>
             )}
 
-            <div
-              aria-hidden="true"
-              className="w-full pointer-events-none"
-              ref={spacerElementRef}
-              style={{ height: "0px" }}
-            />
+            {!showIntroEmptyState && (
+              <div
+                aria-hidden="true"
+                className="w-full pointer-events-none"
+                ref={spacerElementRef}
+                style={{ height: "0px" }}
+              />
+            )}
           </ConversationContent>
           <ConversationScrollButton />
         </Conversation>
