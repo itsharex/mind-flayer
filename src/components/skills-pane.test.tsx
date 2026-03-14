@@ -259,4 +259,102 @@ describe("SkillsPane", () => {
 
     expect(document.body.textContent).toContain("Disabled")
   })
+
+  it("refreshes after uninstall even when disabled skill cleanup fails", async () => {
+    const setDisabledSkillIds = vi.fn().mockRejectedValue(new Error("settings write failed"))
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    listSkillsMock.mockReset()
+    listSkillsMock
+      .mockResolvedValueOnce([
+        {
+          id: "bundled:reader",
+          name: "Bundled Reader",
+          description: "Built-in reader skill",
+          iconUrl: "http://localhost:4321/api/local-image?path=%2Ftmp%2Ficons%2Freader.svg",
+          source: "bundled",
+          canUninstall: false,
+          location: "~/skills/builtin/reader/SKILL.md",
+          filePath: "/tmp/skills/builtin/reader/SKILL.md"
+        },
+        {
+          id: "user:writer",
+          name: "User Writer",
+          description: "User installed writer skill",
+          iconUrl: null,
+          source: "user",
+          canUninstall: true,
+          location: "~/skills/user/writer/SKILL.md",
+          filePath: "/tmp/skills/user/writer/SKILL.md"
+        }
+      ])
+      .mockResolvedValueOnce([
+        {
+          id: "bundled:reader",
+          name: "Bundled Reader",
+          description: "Built-in reader skill",
+          iconUrl: "http://localhost:4321/api/local-image?path=%2Ftmp%2Ficons%2Freader.svg",
+          source: "bundled",
+          canUninstall: false,
+          location: "~/skills/builtin/reader/SKILL.md",
+          filePath: "/tmp/skills/builtin/reader/SKILL.md"
+        }
+      ])
+
+    try {
+      await act(async () => {
+        root.render(
+          <I18nextProvider i18n={i18n}>
+            <SidebarProvider>
+              <SkillsPane
+                disabledSkillIds={["user:writer"]}
+                setDisabledSkillIds={setDisabledSkillIds}
+              />
+            </SidebarProvider>
+          </I18nextProvider>
+        )
+      })
+
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      const uninstallMenuTrigger = container.querySelector(
+        'button[aria-label="More actions for User Writer"]'
+      ) as HTMLButtonElement | null
+
+      await act(async () => {
+        uninstallMenuTrigger?.dispatchEvent(
+          new MouseEvent("pointerdown", { bubbles: true, button: 0 })
+        )
+        await Promise.resolve()
+      })
+
+      const uninstallMenuItem = Array.from(
+        document.body.querySelectorAll('[role="menuitem"]')
+      ).find(element => element.textContent?.includes("Uninstall"))
+
+      await act(async () => {
+        ;(uninstallMenuItem as HTMLElement | undefined)?.click()
+        await Promise.resolve()
+      })
+
+      const confirmUninstallButton = Array.from(document.body.querySelectorAll("button")).find(
+        button => button.textContent?.trim() === "Uninstall"
+      ) as HTMLButtonElement | undefined
+
+      await act(async () => {
+        confirmUninstallButton?.click()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(deleteSkillMock).toHaveBeenCalledWith("user:writer")
+      expect(setDisabledSkillIds).toHaveBeenCalledWith([])
+      expect(listSkillsMock).toHaveBeenCalledTimes(2)
+      expect(document.body.textContent).not.toContain("Remove User Writer from this device?")
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
 })

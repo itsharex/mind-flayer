@@ -103,6 +103,9 @@ export async function handleDeleteSkill(c: Context) {
     if (!skill) {
       throw new NotFoundError(`Skill '${skillId}' was not found`)
     }
+    if (!skill.canUninstall) {
+      throw new ForbiddenError(`Skill '${skillId}' cannot be uninstalled`)
+    }
 
     await uninstallUserSkill(skill)
 

@@ -775,11 +775,20 @@ export async function getSkillDetailById(
     return null
   }
 
-  const contents = await readFile(skill.filePath, "utf8")
+  try {
+    const contents = await readFile(skill.filePath, "utf8")
 
-  return {
-    ...skill,
-    bodyMarkdown: stripSkillFrontmatter(contents)
+    return {
+      ...skill,
+      bodyMarkdown: stripSkillFrontmatter(contents)
+    }
+  } catch (error) {
+    console.error(
+      `[Skills] Failed to load detail for '${skill.id}' at '${skill.filePath}': ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+    return null
   }
 }
 

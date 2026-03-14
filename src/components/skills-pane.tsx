@@ -392,28 +392,44 @@ export function SkillsPane({ disabledSkillIds, setDisabledSkillIds }: SkillsPane
       return
     }
 
+    const skillToUninstall = pendingUninstallSkill
     setIsUninstalling(true)
-    try {
-      await deleteSkill(pendingUninstallSkill.id)
-      if (disabledSkillIdsRef.current.includes(pendingUninstallSkill.id)) {
-        const nextDisabledSkillIds = disabledSkillIdsRef.current.filter(
-          id => id !== pendingUninstallSkill.id
-        )
-        disabledSkillIdsRef.current = nextDisabledSkillIds
-        await setDisabledSkillIds(nextDisabledSkillIds)
-      }
 
-      toast.success(t("skills.uninstallSuccess", { skillName: pendingUninstallSkill.name }))
-      setPendingUninstallSkill(null)
-      setSelectedSkillId(currentId => (currentId === pendingUninstallSkill.id ? null : currentId))
-      setSelectedSkillDetail(currentDetail =>
-        currentDetail?.id === pendingUninstallSkill.id ? null : currentDetail
-      )
-      await loadSkills(true)
+    try {
+      await deleteSkill(skillToUninstall.id)
     } catch (error) {
       toast.error(t("toast.error"), {
         description: error instanceof Error ? error.message : t("skills.uninstallError")
       })
+      setIsUninstalling(false)
+      return
+    }
+
+    if (disabledSkillIdsRef.current.includes(skillToUninstall.id)) {
+      const nextDisabledSkillIds = disabledSkillIdsRef.current.filter(
+        id => id !== skillToUninstall.id
+      )
+      disabledSkillIdsRef.current = nextDisabledSkillIds
+
+      try {
+        await setDisabledSkillIds(nextDisabledSkillIds)
+      } catch (error) {
+        console.warn(
+          `[SkillsPane] Failed to remove deleted skill '${skillToUninstall.id}' from disabled settings: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      }
+    }
+
+    try {
+      toast.success(t("skills.uninstallSuccess", { skillName: skillToUninstall.name }))
+      setPendingUninstallSkill(null)
+      setSelectedSkillId(currentId => (currentId === skillToUninstall.id ? null : currentId))
+      setSelectedSkillDetail(currentDetail =>
+        currentDetail?.id === skillToUninstall.id ? null : currentDetail
+      )
+      await loadSkills(true)
     } finally {
       setIsUninstalling(false)
     }
@@ -562,7 +578,7 @@ export function SkillsPane({ disabledSkillIds, setDisabledSkillIds }: SkillsPane
                 )}
               >
                 <XIcon />
-                <span className="sr-only">Close</span>
+                <span className="sr-only">{t("dialog.close")}</span>
               </DialogClose>
             </div>
 

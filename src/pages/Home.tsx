@@ -22,6 +22,7 @@ import { useSetting } from "@/hooks/use-settings-store"
 import {
   decideTelegramWhitelistRequest,
   getTelegramWhitelistRequests,
+  type RuntimeConfigPayload,
   syncRuntimeConfig,
   type TelegramWhitelistRequest
 } from "@/lib/sidecar-client"
@@ -38,6 +39,80 @@ const handleOpenSettings = () => {
 const TELEGRAM_WHITELIST_POLL_INTERVAL_MS = 2000
 const createNewChatToken = () => globalThis.crypto.randomUUID()
 type ActivePane = "desktop-chat" | "skills" | "telegram-debug"
+
+interface RuntimeConfigSettingsSnapshot {
+  selectedModelApiId?: string
+  enabledChannels: Record<string, boolean>
+  telegramAllowedUserIds: string[]
+  disabledSkills: string[]
+}
+
+function createRuntimeConfigSettingsSnapshot(
+  selectedModelApiId: string | undefined,
+  enabledChannels: Record<string, boolean>,
+  telegramAllowedUserIds: string[],
+  disabledSkills: string[]
+): RuntimeConfigSettingsSnapshot {
+  return {
+    selectedModelApiId,
+    enabledChannels: { ...enabledChannels },
+    telegramAllowedUserIds: [...telegramAllowedUserIds],
+    disabledSkills: [...disabledSkills]
+  }
+}
+
+function createRuntimeConfigPayload(
+  settingsSnapshot: RuntimeConfigSettingsSnapshot,
+  selectedModelProvider: string | null,
+  selectedModelId: string | null
+): RuntimeConfigPayload {
+  return {
+    selectedModel:
+      selectedModelProvider && selectedModelId
+        ? {
+            provider: selectedModelProvider,
+            modelId: selectedModelId
+          }
+        : null,
+    channels: {
+      telegram: {
+        enabled: settingsSnapshot.enabledChannels.telegram ?? false,
+        allowedUserIds: settingsSnapshot.telegramAllowedUserIds
+      }
+    },
+    disabledSkills: settingsSnapshot.disabledSkills
+  }
+}
+
+function arraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function booleanRecordEqual(
+  left: Record<string, boolean>,
+  right: Record<string, boolean>
+): boolean {
+  const leftKeys = Object.keys(left).sort()
+  const rightKeys = Object.keys(right).sort()
+
+  if (!arraysEqual(leftKeys, rightKeys)) {
+    return false
+  }
+
+  return leftKeys.every(key => left[key] === right[key])
+}
+
+function runtimeConfigSettingsEqual(
+  left: RuntimeConfigSettingsSnapshot,
+  right: RuntimeConfigSettingsSnapshot
+): boolean {
+  return (
+    left.selectedModelApiId === right.selectedModelApiId &&
+    booleanRecordEqual(left.enabledChannels, right.enabledChannels) &&
+    arraysEqual(left.telegramAllowedUserIds, right.telegramAllowedUserIds) &&
+    arraysEqual(left.disabledSkills, right.disabledSkills)
+  )
+}
 
 export default function Page() {
   const { t } = useTranslation("common")
@@ -56,8 +131,8 @@ export default function Page() {
   const [activePane, setActivePane] = useState<ActivePane>("desktop-chat")
   const [unreadChatIds, setUnreadChatIds] = useState<Set<ChatId>>(new Set())
   const [replyingChatIds, setReplyingChatIds] = useState<Set<ChatId>>(new Set())
-  const [selectedModelApiId] = useSetting("selectedModelApiId")
-  const [enabledChannels] = useSetting("enabledChannels")
+  const [selectedModelApiId, setSelectedModelApiId] = useSetting("selectedModelApiId")
+  const [enabledChannels, setEnabledChannels] = useSetting("enabledChannels")
   const [telegramAllowedUserIds, setTelegramAllowedUserIds] = useSetting("telegramAllowedUserIds")
   const [disabledSkills, setDisabledSkills] = useSetting("disabledSkills")
   const [whitelistRequests, setWhitelistRequests] = useState<TelegramWhitelistRequest[]>([])
@@ -69,6 +144,8 @@ export default function Page() {
   const newChatTokenRef = useRef(newChatToken)
   const telegramAllowedUserIdsRef = useRef(telegramAllowedUserIds)
   const runtimeConfigSyncQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const latestRuntimeConfigSyncIdRef = useRef(0)
+  const lastAppliedRuntimeConfigRef = useRef<RuntimeConfigSettingsSnapshot | null>(null)
   const selectedModel =
     availableModels.find(model => model.api_id === selectedModelApiId) ?? availableModels[0] ?? null
   const selectedModelProvider = selectedModel?.provider ?? null
@@ -90,38 +167,74 @@ export default function Page() {
     activePaneRef.current = activePane
   }, [activePane])
 
+  const restoreRuntimeConfigSnapshot = useCallback(
+    async (snapshot: RuntimeConfigSettingsSnapshot) => {
+      await Promise.all([
+        setSelectedModelApiId(snapshot.selectedModelApiId),
+        setEnabledChannels(snapshot.enabledChannels),
+        setTelegramAllowedUserIds(snapshot.telegramAllowedUserIds),
+        setDisabledSkills(snapshot.disabledSkills)
+      ])
+    },
+    [setDisabledSkills, setEnabledChannels, setSelectedModelApiId, setTelegramAllowedUserIds]
+  )
+
   useEffect(() => {
     let cancelled = false
-    const payload = {
-      selectedModel:
-        selectedModelProvider && selectedModelId
-          ? {
-              provider: selectedModelProvider,
-              modelId: selectedModelId
-            }
-          : null,
-      channels: {
-        telegram: {
-          enabled: enabledChannels.telegram ?? false,
-          allowedUserIds: telegramAllowedUserIds
-        }
-      },
+    const syncId = latestRuntimeConfigSyncIdRef.current + 1
+    latestRuntimeConfigSyncIdRef.current = syncId
+
+    const settingsSnapshot = createRuntimeConfigSettingsSnapshot(
+      selectedModelApiId,
+      enabledChannels,
+      telegramAllowedUserIds,
       disabledSkills
-    }
+    )
+    const payload = createRuntimeConfigPayload(
+      settingsSnapshot,
+      selectedModelProvider,
+      selectedModelId
+    )
 
     runtimeConfigSyncQueueRef.current = runtimeConfigSyncQueueRef.current
       .catch(() => undefined)
       .then(async () => {
-        if (cancelled) {
+        if (cancelled || syncId !== latestRuntimeConfigSyncIdRef.current) {
           return
         }
 
         await syncRuntimeConfig(payload)
+        lastAppliedRuntimeConfigRef.current = settingsSnapshot
       })
-      .catch(error => {
-        if (!cancelled) {
-          console.warn("[Home] Failed to sync runtime config:", error)
+      .catch(async error => {
+        if (cancelled || syncId !== latestRuntimeConfigSyncIdRef.current) {
+          return
         }
+
+        console.warn("[Home] Failed to sync runtime config:", error)
+        const lastAppliedRuntimeConfig = lastAppliedRuntimeConfigRef.current
+        const shouldRollback =
+          lastAppliedRuntimeConfig &&
+          !runtimeConfigSettingsEqual(lastAppliedRuntimeConfig, settingsSnapshot)
+
+        if (!lastAppliedRuntimeConfig) {
+          toast.error(t("toast.error"), {
+            id: "runtime-config-sync-error",
+            description: t("runtimeConfig.syncError")
+          })
+          return
+        }
+
+        if (!shouldRollback) {
+          return
+        }
+
+        toast.error(t("toast.error"), {
+          id: "runtime-config-sync-error",
+          description: t("runtimeConfig.syncError")
+        })
+
+        await restoreRuntimeConfigSnapshot(lastAppliedRuntimeConfig)
       })
 
     return () => {
@@ -129,9 +242,12 @@ export default function Page() {
     }
   }, [
     disabledSkills,
-    enabledChannels.telegram,
+    enabledChannels,
+    restoreRuntimeConfigSnapshot,
+    selectedModelApiId,
     selectedModelId,
     selectedModelProvider,
+    t,
     telegramAllowedUserIds
   ])
 

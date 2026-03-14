@@ -33,8 +33,8 @@ Do **not** add any additional text, explanation, or formatting around the respon
 ┌─────────────────────────────────────────────────────────┐
 │                    Skill Pipeline                       │
 │                                                         │
-│  1. Bundle    →  Tauri packages skill directory         │
-│  2. Discover  →  App scans bundled-skills/ at runtime   │
+│  1. Embed     →  build.rs snapshots bundled skill files │
+│  2. Install   →  sidecar.rs writes them into app data   │
 │  3. Register  →  Frontmatter metadata parsed & indexed  │
 │  4. Match     →  User message triggers skill lookup     │
 │  5. Execute   →  Agent reads SKILL.md & produces output │
@@ -45,10 +45,11 @@ Do **not** add any additional text, explanation, or formatting around the respon
 ### Step-by-step
 
 1. The skill is bundled inside `src-tauri/bundled-skills/skill-smoke-test/`
-2. At build time, Tauri bundles this directory as a resource
-3. At runtime, the app discovers and registers the skill via its frontmatter metadata
-4. When a user message matches the trigger phrase, the agent reads this file and produces the expected output
-5. The fixed output string enables both manual and automated pass/fail checks
+2. At build time, `src-tauri/build.rs` embeds the bundled skill files into generated Rust data
+3. At app startup, `src-tauri/src/setup/sidecar.rs` installs those embedded files into the app support skills directory
+4. The sidecar then discovers and registers the installed skill via its frontmatter metadata
+5. When a user message matches the trigger phrase, the agent reads this file and produces the expected output
+6. The fixed output string enables both manual and automated pass/fail checks
 
 ## Troubleshooting
 
@@ -56,6 +57,6 @@ If invoking this skill does **not** produce the expected output:
 
 | Symptom | Possible Cause |
 |---|---|
-| Skill not found | Bundled skills directory not included in Tauri resources |
-| Skill found but not invoked | Frontmatter `description` not matching or skill registry error |
+| Skill not found | `build.rs` did not embed the bundled skill files or `sidecar.rs` did not install them into app support |
+| Skill found but not invoked | Frontmatter metadata was not parsed correctly or skill registry filtering skipped the skill |
 | Wrong output | SKILL.md content was modified or agent did not follow instructions |

@@ -32,6 +32,12 @@
     "filesAttachedDescription": "{{count}} file(s) attached to message",
     "apiKeyNotConfigured": "Please configure your API key in Settings to continue chatting."
   },
+  "dialog": {
+    "close": "Close"
+  },
+  "runtimeConfig": {
+    "syncError": "Failed to sync the latest runtime settings. The local change was reverted."
+  },
   "sidebar": {
     "search": "Search",
     "searchChat": "Search Chat",

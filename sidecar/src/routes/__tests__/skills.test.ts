@@ -144,13 +144,22 @@ Body
   it("returns 404 when the skill detail is missing", async () => {
     const appSupportDir = await mkdtemp(join(tmpdir(), "mind-flayer-skills-route-missing-"))
     tempDirs.push(appSupportDir)
+    const previousAppSupportDir = process.env.MINDFLAYER_APP_SUPPORT_DIR
     process.env.MINDFLAYER_APP_SUPPORT_DIR = appSupportDir
 
-    const app = new Hono()
-    app.get("/api/skills/:skillId", handleGetSkillDetail)
+    try {
+      const app = new Hono()
+      app.get("/api/skills/:skillId", handleGetSkillDetail)
 
-    const res = await app.request("/api/skills/user%3Amissing-skill")
-    expect(res.status).toBe(404)
+      const res = await app.request("/api/skills/user%3Amissing-skill")
+      expect(res.status).toBe(404)
+    } finally {
+      if (previousAppSupportDir === undefined) {
+        delete process.env.MINDFLAYER_APP_SUPPORT_DIR
+      } else {
+        process.env.MINDFLAYER_APP_SUPPORT_DIR = previousAppSupportDir
+      }
+    }
   })
 
   it("deletes a user-installed skill", async () => {

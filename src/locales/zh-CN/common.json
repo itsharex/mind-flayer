@@ -32,6 +32,12 @@
     "filesAttachedDescription": "已附加 {{count}} 个文件到消息",
     "apiKeyNotConfigured": "请在设置中配置 API Key 以继续对话。"
   },
+  "dialog": {
+    "close": "关闭"
+  },
+  "runtimeConfig": {
+    "syncError": "同步最新运行时设置失败，已回滚本地改动。"
+  },
   "sidebar": {
     "search": "搜索",
     "searchChat": "搜索对话",
