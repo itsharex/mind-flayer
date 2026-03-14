@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { Hono } from "hono"
 import { afterEach, describe, expect, it } from "vitest"
 import { handleDeleteSkill, handleGetSkillDetail, handleListSkills } from "../skills"
@@ -14,6 +14,17 @@ async function writeSkill(
   const skillDir = join(appSupportDir, "skills", sourceDir, relativeDir)
   await mkdir(skillDir, { recursive: true })
   await writeFile(join(skillDir, "SKILL.md"), content, "utf8")
+}
+
+async function writeSkillAsset(
+  appSupportDir: string,
+  sourceDir: "builtin" | "user",
+  relativePath: string,
+  content: string
+) {
+  const assetPath = join(appSupportDir, "skills", sourceDir, relativePath)
+  await mkdir(dirname(assetPath), { recursive: true })
+  await writeFile(assetPath, content, "utf8")
 }
 
 describe("skills routes", () => {
@@ -43,10 +54,18 @@ describe("skills routes", () => {
       `---
 name: skill-smoke-test
 description: smoke description
+metadata:
+  icon: assets/icon.svg
 ---
 
 Smoke
 `
+    )
+    await writeSkillAsset(
+      appSupportDir,
+      "builtin",
+      "skill-smoke-test/assets/icon.svg",
+      '<svg xmlns="http://www.w3.org/2000/svg" />'
     )
 
     const app = new Hono()
@@ -57,7 +76,12 @@ Smoke
 
     const payload = (await res.json()) as {
       success: boolean
-      skills: Array<{ id: string; source: string; canUninstall: boolean }>
+      skills: Array<{
+        id: string
+        source: string
+        canUninstall: boolean
+        iconUrl: string | null
+      }>
     }
 
     expect(payload.success).toBe(true)
@@ -65,7 +89,8 @@ Smoke
     expect(payload.skills[0]).toMatchObject({
       id: "bundled:skill-smoke-test",
       source: "bundled",
-      canUninstall: false
+      canUninstall: false,
+      iconUrl: `http://localhost/api/local-image?path=${encodeURIComponent(join(appSupportDir, "skills", "builtin", "skill-smoke-test", "assets", "icon.svg"))}`
     })
   })
 
@@ -81,12 +106,20 @@ Smoke
       `---
 name: detail-skill
 description: detail description
+metadata:
+  icon: assets/icon.svg
 ---
 
 # Detail
 
 Body
 `
+    )
+    await writeSkillAsset(
+      appSupportDir,
+      "builtin",
+      "detail-skill/assets/icon.svg",
+      '<svg xmlns="http://www.w3.org/2000/svg" />'
     )
 
     const app = new Hono()
@@ -97,12 +130,15 @@ Body
 
     const payload = (await res.json()) as {
       success: boolean
-      skill: { id: string; bodyMarkdown: string }
+      skill: { id: string; bodyMarkdown: string; iconUrl: string | null }
     }
 
     expect(payload.success).toBe(true)
     expect(payload.skill.id).toBe("bundled:detail-skill")
     expect(payload.skill.bodyMarkdown).toBe("# Detail\n\nBody")
+    expect(payload.skill.iconUrl).toBe(
+      `http://localhost/api/local-image?path=${encodeURIComponent(join(appSupportDir, "skills", "builtin", "detail-skill", "assets", "icon.svg"))}`
+    )
   })
 
   it("returns 404 when the skill detail is missing", async () => {

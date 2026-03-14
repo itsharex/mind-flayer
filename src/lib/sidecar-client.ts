@@ -71,6 +71,7 @@ export interface SkillListItem {
   id: string
   name: string
   description: string
+  iconUrl: string | null
   source: SkillSource
   canUninstall: boolean
   location: string

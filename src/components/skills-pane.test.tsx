@@ -2,7 +2,7 @@ import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { I18nextProvider } from "react-i18next"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-import { SkillsPane } from "@/components/skills-pane"
+import { SkillsPane, splitSkillsBySource } from "@/components/skills-pane"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import i18n from "@/lib/i18n"
 
@@ -63,6 +63,7 @@ describe("SkillsPane", () => {
         id: "bundled:reader",
         name: "Bundled Reader",
         description: "Built-in reader skill",
+        iconUrl: "http://localhost:4321/api/local-image?path=%2Ftmp%2Ficons%2Freader.svg",
         source: "bundled",
         canUninstall: false,
         location: "~/skills/builtin/reader/SKILL.md",
@@ -72,6 +73,7 @@ describe("SkillsPane", () => {
         id: "user:writer",
         name: "User Writer",
         description: "User installed writer skill",
+        iconUrl: null,
         source: "user",
         canUninstall: true,
         location: "~/skills/user/writer/SKILL.md",
@@ -82,6 +84,7 @@ describe("SkillsPane", () => {
       id: "bundled:reader",
       name: "Bundled Reader",
       description: "Built-in reader skill",
+      iconUrl: "http://localhost:4321/api/local-image?path=%2Ftmp%2Ficons%2Freader.svg",
       source: "bundled",
       canUninstall: false,
       location: "~/skills/builtin/reader/SKILL.md",
@@ -131,6 +134,12 @@ describe("SkillsPane", () => {
     expect(container.textContent).toContain("User-installed")
     expect(container.textContent).toContain("Bundled Reader")
     expect(container.textContent).toContain("User Writer")
+    expect(
+      container.querySelector(
+        'img[src="http://localhost:4321/api/local-image?path=%2Ftmp%2Ficons%2Freader.svg"]'
+      )
+    ).not.toBeNull()
+    expect(container.querySelector("[data-skill-icon-fallback]")).not.toBeNull()
 
     const switches = Array.from(container.querySelectorAll('[role="switch"]'))
     expect(switches).toHaveLength(2)
@@ -169,5 +178,85 @@ describe("SkillsPane", () => {
     })
 
     expect(document.body.textContent).toContain("Uninstall")
+  })
+
+  it("sorts bundled and user skills by skill name", () => {
+    const { bundledSkills, userSkills } = splitSkillsBySource([
+      {
+        id: "bundled:zeta",
+        name: "Zeta Skill",
+        description: "zeta",
+        iconUrl: null,
+        source: "bundled",
+        canUninstall: false,
+        location: "",
+        filePath: ""
+      },
+      {
+        id: "user:beta",
+        name: "beta skill",
+        description: "beta",
+        iconUrl: null,
+        source: "user",
+        canUninstall: true,
+        location: "",
+        filePath: ""
+      },
+      {
+        id: "bundled:alpha",
+        name: "Alpha Skill",
+        description: "alpha",
+        iconUrl: null,
+        source: "bundled",
+        canUninstall: false,
+        location: "",
+        filePath: ""
+      },
+      {
+        id: "user:gamma",
+        name: "Gamma Skill",
+        description: "gamma",
+        iconUrl: null,
+        source: "user",
+        canUninstall: true,
+        location: "",
+        filePath: ""
+      }
+    ])
+
+    expect(bundledSkills.map(skill => skill.name)).toEqual(["Alpha Skill", "Zeta Skill"])
+    expect(userSkills.map(skill => skill.name)).toEqual(["beta skill", "Gamma Skill"])
+  })
+
+  it("shows a disabled badge in detail when the selected skill is disabled", async () => {
+    const setDisabledSkillIds = vi.fn().mockResolvedValue(undefined)
+
+    await act(async () => {
+      root.render(
+        <I18nextProvider i18n={i18n}>
+          <SidebarProvider>
+            <SkillsPane
+              disabledSkillIds={["bundled:reader"]}
+              setDisabledSkillIds={setDisabledSkillIds}
+            />
+          </SidebarProvider>
+        </I18nextProvider>
+      )
+    })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    const card = container.querySelector(
+      'button[aria-label="Open details for Bundled Reader"]'
+    ) as HTMLButtonElement | null
+
+    await act(async () => {
+      card?.click()
+      await Promise.resolve()
+    })
+
+    expect(document.body.textContent).toContain("Disabled")
   })
 })

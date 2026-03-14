@@ -44,7 +44,7 @@ export async function openSettingsWindow(initialTab: SettingsSection = SettingsS
   new WebviewWindow("settings", {
     url: `/settings?tab=${initialTab}`,
     width: 720,
-    height: 580,
+    height: 680,
     resizable: false,
     fullscreen: false,
     maximizable: false,

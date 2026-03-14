@@ -78,6 +78,7 @@
     "moreActions": "{{name}} 的更多操作",
     "enableDisable": "启用或禁用 {{name}}",
     "openFolderError": "打开文件夹失败。",
+    "disabledBadge": "已禁用",
     "contentTitle": "技能内容",
     "uninstall": "卸载",
     "uninstalling": "卸载中",

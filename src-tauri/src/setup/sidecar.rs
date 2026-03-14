@@ -29,7 +29,7 @@ const USER_SKILLS_DIR_NAME: &str = "user";
 
 struct BundledSkillFile {
     relative_path: &'static str,
-    contents: &'static str,
+    contents: &'static [u8],
 }
 
 struct BundledSkill {
@@ -37,15 +37,7 @@ struct BundledSkill {
     files: &'static [BundledSkillFile],
 }
 
-const BUNDLED_SMOKE_TEST_SKILL_FILES: &[BundledSkillFile] = &[BundledSkillFile {
-    relative_path: "SKILL.md",
-    contents: include_str!("../../bundled-skills/skill-smoke-test/SKILL.md"),
-}];
-
-const BUNDLED_SKILLS: &[BundledSkill] = &[BundledSkill {
-    name: "skill-smoke-test",
-    files: BUNDLED_SMOKE_TEST_SKILL_FILES,
-}];
+include!(concat!(env!("OUT_DIR"), "/bundled_skills_generated.rs"));
 
 /// State to hold the sidecar process handle
 pub struct SidecarState {
@@ -882,6 +874,7 @@ fn force_kill_pid(pid: u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::{Path, PathBuf};
     use std::time::Duration;
 
     fn create_temp_dir(prefix: &str) -> std::path::PathBuf {
@@ -892,6 +885,41 @@ mod tests {
         let path = std::env::temp_dir().join(format!("{}-{}", prefix, nanos));
         fs::create_dir_all(&path).expect("failed to create temp test directory");
         path
+    }
+
+    fn collect_relative_file_paths(root: &Path) -> Vec<PathBuf> {
+        let mut files = Vec::new();
+        let mut pending_directories = vec![root.to_path_buf()];
+
+        while let Some(current_directory) = pending_directories.pop() {
+            let mut entries = fs::read_dir(&current_directory)
+                .expect("failed to read test directory")
+                .collect::<Result<Vec<_>, _>>()
+                .expect("failed to collect directory entries");
+            entries.sort_by(|left, right| left.path().cmp(&right.path()));
+
+            for entry in entries {
+                let entry_path = entry.path();
+                let file_type = entry.file_type().expect("failed to inspect test file type");
+
+                if file_type.is_dir() {
+                    pending_directories.push(entry_path);
+                    continue;
+                }
+
+                if file_type.is_file() {
+                    files.push(
+                        entry_path
+                            .strip_prefix(root)
+                            .expect("test file should be inside root")
+                            .to_path_buf(),
+                    );
+                }
+            }
+        }
+
+        files.sort();
+        files
     }
 
     #[test]
@@ -968,17 +996,27 @@ mod tests {
         )
         .expect("bundled skill installation should succeed");
 
-        let installed_skill = app_support_dir
+        let source_skill_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("bundled-skills")
+            .join("skill-smoke-test");
+        let installed_skill_dir = app_support_dir
             .join(GLOBAL_SKILLS_DIR_NAME)
             .join(BUNDLED_SKILLS_DIR_NAME)
-            .join("skill-smoke-test")
-            .join("SKILL.md");
-        let contents = fs::read_to_string(&installed_skill)
-            .expect("bundled skill file should be readable after install");
+            .join("skill-smoke-test");
+        let bundled_files = collect_relative_file_paths(&source_skill_dir);
 
-        assert!(installed_skill.exists());
-        assert!(contents.contains("name: skill-smoke-test"));
-        assert!(contents.contains("skill smoke test ok"));
+        assert!(!bundled_files.is_empty());
+
+        for relative_file_path in bundled_files {
+            let source_path = source_skill_dir.join(&relative_file_path);
+            let installed_path = installed_skill_dir.join(&relative_file_path);
+
+            assert!(installed_path.exists());
+            assert_eq!(
+                fs::read(&installed_path).expect("installed bundled file should be readable"),
+                fs::read(&source_path).expect("source bundled file should be readable"),
+            );
+        }
 
         let _ = fs::remove_dir_all(app_support_dir);
     }
@@ -1020,6 +1058,14 @@ mod tests {
         assert!(contents.contains("skill smoke test ok"));
         assert!(!stale_file.exists());
 
+        let installed_icon = app_support_dir
+            .join(GLOBAL_SKILLS_DIR_NAME)
+            .join(BUNDLED_SKILLS_DIR_NAME)
+            .join("skill-smoke-test")
+            .join("assets")
+            .join("icon.svg");
+        assert!(installed_icon.exists());
+
         let _ = fs::remove_dir_all(app_support_dir);
     }
 
@@ -1057,6 +1103,14 @@ mod tests {
         assert!(contents.contains("name: skill-smoke-test"));
         assert!(contents.contains("skill smoke test ok"));
         assert!(!legacy_skill.exists());
+
+        let migrated_icon = app_support_dir
+            .join(GLOBAL_SKILLS_DIR_NAME)
+            .join(BUNDLED_SKILLS_DIR_NAME)
+            .join("skill-smoke-test")
+            .join("assets")
+            .join("icon.svg");
+        assert!(migrated_icon.exists());
 
         let _ = fs::remove_dir_all(app_support_dir);
     }

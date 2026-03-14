@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { afterEach, describe, expect, it } from "vitest"
 import { discoverSkills, getSkillById, getSkillDetailById, uninstallUserSkill } from "../catalog"
 
@@ -13,6 +13,17 @@ async function writeSkill(
   const skillDir = join(appSupportDir, "skills", sourceDir, relativeDir)
   await mkdir(skillDir, { recursive: true })
   await writeFile(join(skillDir, "SKILL.md"), content, "utf8")
+}
+
+async function writeSkillAsset(
+  appSupportDir: string,
+  sourceDir: "builtin" | "user",
+  relativePath: string,
+  content: string
+) {
+  const assetPath = join(appSupportDir, "skills", sourceDir, relativePath)
+  await mkdir(dirname(assetPath), { recursive: true })
+  await writeFile(assetPath, content, "utf8")
 }
 
 describe("skills catalog", () => {
@@ -198,6 +209,60 @@ Body content
 
     expect(detail?.bodyMarkdown).toBe("# Detail\n\nBody content")
     expect(detail?.source).toBe("bundled")
+  })
+
+  it("resolves explicit and default skill icons", async () => {
+    const appSupportDir = await mkdtemp(join(tmpdir(), "mind-flayer-skill-icons-"))
+    tempDirs.push(appSupportDir)
+
+    await writeSkill(
+      appSupportDir,
+      "builtin",
+      "explicit-icon",
+      `---
+name: explicit-icon
+description: explicit icon description
+metadata:
+  icon: assets/brand.svg
+---
+
+# Explicit
+`
+    )
+    await writeSkillAsset(
+      appSupportDir,
+      "builtin",
+      "explicit-icon/assets/brand.svg",
+      '<svg xmlns="http://www.w3.org/2000/svg" />'
+    )
+
+    await writeSkill(
+      appSupportDir,
+      "builtin",
+      "default-icon",
+      `---
+name: default-icon
+description: default icon description
+---
+
+# Default
+`
+    )
+    await writeSkillAsset(
+      appSupportDir,
+      "builtin",
+      "default-icon/assets/icon.svg",
+      '<svg xmlns="http://www.w3.org/2000/svg" />'
+    )
+
+    const skills = await discoverSkills({ appSupportDir })
+
+    expect(skills.find(skill => skill.id === "bundled:explicit-icon")).toMatchObject({
+      iconPath: join(appSupportDir, "skills", "builtin", "explicit-icon", "assets", "brand.svg")
+    })
+    expect(skills.find(skill => skill.id === "bundled:default-icon")).toMatchObject({
+      iconPath: join(appSupportDir, "skills", "builtin", "default-icon", "assets", "icon.svg")
+    })
   })
 
   it("refuses to uninstall the user skills root itself", async () => {

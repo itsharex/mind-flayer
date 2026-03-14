@@ -1,13 +1,15 @@
 import { type Dirent, constants as fsConstants } from "node:fs"
 import { access, readdir, readFile, realpath, rm } from "node:fs/promises"
 import { homedir } from "node:os"
-import { delimiter, isAbsolute, relative, resolve } from "node:path"
+import { delimiter, extname, isAbsolute, relative, resolve } from "node:path"
 
 const APP_SUPPORT_DIR_ENV_KEY = "MINDFLAYER_APP_SUPPORT_DIR"
 const SKILL_FILE_NAME = "SKILL.md"
 const GLOBAL_SKILLS_DIR_NAME = "skills"
 const BUNDLED_SKILLS_DIR_NAME = "builtin"
 const USER_SKILLS_DIR_NAME = "user"
+const SKILL_ICON_CANDIDATES = ["assets/icon.svg", "assets/icon.png", "assets/icon.webp"] as const
+const SUPPORTED_ICON_EXTENSIONS = new Set([".svg", ".png", ".jpg", ".jpeg", ".webp", ".gif"])
 
 type ParsedYamlValue = unknown
 
@@ -27,6 +29,7 @@ export interface SkillMetadata {
     env?: string[]
   }
   os?: string | string[]
+  icon?: string
   [key: string]: unknown
 }
 
@@ -35,6 +38,7 @@ export interface SkillCatalogEntry {
   name: string
   description: string
   metadata: SkillMetadata
+  iconPath: string | null
   filePath: string
   location: string
   skillDir: string
@@ -113,6 +117,64 @@ function normalizeSkillIdentifier(relativeSkillDir: string): string {
     .replace(/^\/+|\/+$/g, "")
     .trim()
   return normalized || "__root__"
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path, fsConstants.R_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function hasSupportedIconExtension(path: string): boolean {
+  return SUPPORTED_ICON_EXTENSIONS.has(extname(path).toLowerCase())
+}
+
+async function resolveSkillAssetPath(skillDir: string, assetPath: unknown): Promise<string | null> {
+  if (typeof assetPath !== "string" || !assetPath.trim()) {
+    return null
+  }
+
+  const resolvedAssetPath = resolve(skillDir, assetPath.trim())
+  if (!isPathWithinRoot(skillDir, resolvedAssetPath)) {
+    return null
+  }
+
+  if (!hasSupportedIconExtension(resolvedAssetPath)) {
+    return null
+  }
+
+  if (!(await pathExists(resolvedAssetPath))) {
+    return null
+  }
+
+  return resolvedAssetPath
+}
+
+async function findFirstSkillAssetPath(
+  skillDir: string,
+  candidates: readonly string[]
+): Promise<string | null> {
+  for (const candidate of candidates) {
+    const resolvedAssetPath = await resolveSkillAssetPath(skillDir, candidate)
+    if (resolvedAssetPath) {
+      return resolvedAssetPath
+    }
+  }
+
+  return null
+}
+
+async function resolveSkillIconPaths(
+  skillDir: string,
+  metadata: SkillMetadata
+): Promise<string | null> {
+  return (
+    (await resolveSkillAssetPath(skillDir, metadata.icon)) ??
+    (await findFirstSkillAssetPath(skillDir, SKILL_ICON_CANDIDATES))
+  )
 }
 
 export function getSkillId(source: SkillSource, identifier: string): string {
@@ -627,15 +689,18 @@ async function loadSkillFromFile(
 
     const relativePath = skillFilePath.slice(root.absolutePath.length + 1).replaceAll("\\", "/")
     const relativeSkillDir = relativePath.split("/").slice(0, -1).join("/")
+    const skillDir = skillFilePath.slice(0, -SKILL_FILE_NAME.length - 1)
+    const iconPath = await resolveSkillIconPaths(skillDir, metadata)
 
     return {
       id: getSkillId(root.source, relativeSkillDir),
       name,
       description,
       metadata,
+      iconPath,
       filePath: skillFilePath,
       location: `${root.displayPrefix}/${relativePath}`,
-      skillDir: skillFilePath.slice(0, -SKILL_FILE_NAME.length - 1),
+      skillDir,
       source: root.source,
       canUninstall: root.source === "user"
     }

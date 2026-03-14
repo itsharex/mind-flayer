@@ -1,12 +1,10 @@
 import { revealItemInDir } from "@tauri-apps/plugin-opener"
 import {
-  ChevronDownIcon,
-  InfoIcon,
+  ArrowUpRightIcon,
+  BadgeInfoIcon,
   MoreHorizontalIcon,
-  MoveUpRightIcon,
   RefreshCwIcon,
   Trash2Icon,
-  WandSparklesIcon,
   XIcon
 } from "lucide-react"
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -15,7 +13,6 @@ import { toast } from "sonner"
 import { MessageResponse } from "@/components/ai-elements/message"
 import { TopFloatingHeader } from "@/components/top-floating-header"
 import { Button } from "@/components/ui/button"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   Dialog,
   DialogClose,
@@ -43,10 +40,26 @@ import {
 } from "@/lib/sidecar-client"
 import { cn } from "@/lib/utils"
 
+const SKILL_NAME_COLLATOR = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base"
+})
+
+function sortSkillsByName(skills: SkillListItem[]) {
+  return [...skills].sort((left, right) => {
+    const byName = SKILL_NAME_COLLATOR.compare(left.name, right.name)
+    if (byName !== 0) {
+      return byName
+    }
+
+    return left.id.localeCompare(right.id)
+  })
+}
+
 export function splitSkillsBySource(skills: SkillListItem[]) {
   return {
-    bundledSkills: skills.filter(skill => skill.source === "bundled"),
-    userSkills: skills.filter(skill => skill.source === "user")
+    bundledSkills: sortSkillsByName(skills.filter(skill => skill.source === "bundled")),
+    userSkills: sortSkillsByName(skills.filter(skill => skill.source === "user"))
   }
 }
 
@@ -56,7 +69,7 @@ const SKILLS_HEADER_CONTENT_CLASS = "w-[min(960px,calc(100vw-13rem))]"
 const SKILL_CARD_GRID_CLASS = "grid justify-items-center gap-3 md:grid-cols-2"
 const SKILL_CARD_WIDTH_CLASS = "w-full max-w-[28rem] md:max-w-none"
 const SKILL_DETAIL_DIALOG_CLASS =
-  "w-[min(56rem,calc(100vw-4rem))] max-w-[calc(100vw-4rem)] max-h-[calc(100vh-4rem)] gap-4 overflow-hidden py-4 px-6"
+  "flex h-[min(720px,calc(100vh-4rem))] w-[calc(100vw-4rem)] max-h-[calc(100vh-4rem)] max-w-[calc(100vw-4rem)] flex-col gap-4 overflow-hidden px-4 py-4 sm:w-[580px] sm:!max-w-[580px]"
 
 interface SkillsPaneProps {
   disabledSkillIds: string[]
@@ -66,56 +79,88 @@ interface SkillsPaneProps {
 interface SkillsSectionProps {
   title: string
   description: string
-  count: number
-  open: boolean
-  onOpenChange: (nextOpen: boolean) => void
   children: ReactNode
 }
 
-function SkillsSection({
-  title,
-  description,
-  count,
-  open,
-  onOpenChange,
-  children
-}: SkillsSectionProps) {
+interface SkillIconProps {
+  iconUrl?: string | null
+  className?: string
+}
+
+function SkillFallbackIcon() {
   return (
-    <Collapsible open={open} onOpenChange={onOpenChange}>
-      <div className="flex items-center justify-between gap-4 py-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <CollapsibleTrigger asChild>
-            <button type="button" className="flex min-w-0 items-center gap-2 text-left">
-              <ChevronDownIcon
-                className={cn("size-4 shrink-0 transition-transform", open && "rotate-180")}
-              />
-              <span className="truncate text-sm font-medium">{title}</span>
-            </button>
-          </CollapsibleTrigger>
+    <svg
+      viewBox="0 0 40 40"
+      fill="none"
+      aria-hidden="true"
+      data-skill-icon-fallback
+      className="size-full"
+    >
+      <rect width="40" height="40" rx="10" fill="#FFF7ED" />
+      <path
+        d="M22.2 7.8c.3 0 .5.2.6.5l1.6 5.1a.8.8 0 0 0 .5.5l5.1 1.6c.3 0 .5.3.5.6 0 .2-.2.5-.5.5l-5.1 1.6a.8.8 0 0 0-.5.5l-1.6 5.1c0 .3-.3.5-.6.5-.2 0-.5-.2-.5-.5l-1.6-5.1a.8.8 0 0 0-.5-.5l-5.1-1.6c-.3 0-.5-.3-.5-.5 0-.3.2-.5.5-.6l5.1-1.6a.8.8 0 0 0 .5-.5l1.6-5.1c0-.3.3-.5.5-.5Z"
+        fill="#F97316"
+      />
+      <path
+        d="M8 28.4c3.8-3 8-4.5 12.8-4.5 4.5 0 8.3 1.2 11.2 3.5V30H8v-1.6Z"
+        fill="#7DD3FC"
+        opacity="0.85"
+      />
+      <circle cx="29.5" cy="10.5" r="3.5" fill="#FCD34D" />
+      <circle cx="11.5" cy="11.5" r="2" fill="#FDBA74" />
+    </svg>
+  )
+}
 
-          <Tooltip disableHoverableContent={true}>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="size-5 rounded-full text-muted-foreground"
-                aria-label={description}
-              >
-                <InfoIcon className="size-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right" className="max-w-64 text-xs leading-5">
-              <p>{description}</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
+function SkillIcon({ iconUrl, className }: SkillIconProps) {
+  return (
+    <div
+      className={cn(
+        "size-10 overflow-hidden rounded-md bg-muted/70 text-muted-foreground",
+        className
+      )}
+    >
+      {iconUrl ? (
+        <img
+          src={iconUrl}
+          alt=""
+          aria-hidden="true"
+          className="size-full object-cover"
+          loading="lazy"
+        />
+      ) : (
+        <SkillFallbackIcon />
+      )}
+    </div>
+  )
+}
 
-        <div className="shrink-0 text-xs text-muted-foreground">{count}</div>
+function SkillsSection({ title, description, children }: SkillsSectionProps) {
+  return (
+    <section className="space-y-3">
+      <div className="flex min-w-0 items-center gap-1.5 py-1 px-3">
+        <span className="truncate text-xs font-medium">{title}</span>
+
+        <Tooltip disableHoverableContent={true}>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="size-4 rounded-full text-muted-foreground"
+              aria-label={description}
+            >
+              <BadgeInfoIcon className="size-3" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="max-w-64 text-xs leading-5">
+            <p>{description}</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
 
-      <CollapsibleContent className="pt-3">{children}</CollapsibleContent>
-    </Collapsible>
+      {children}
+    </section>
   )
 }
 
@@ -145,9 +190,9 @@ function SkillCard({
   return (
     <div
       className={cn(
-        "group relative w-full rounded-xl border bg-background transition-colors",
+        "group relative w-full rounded-2xl transition-colors",
         SKILL_CARD_WIDTH_CLASS,
-        "hover:bg-muted/20 hover:border-border/80"
+        "bg-transparent hover:bg-muted/55"
       )}
     >
       <button
@@ -161,51 +206,53 @@ function SkillCard({
         onClick={() => onOpenDetail(skill.id)}
       />
 
-      <div className="pointer-events-none relative z-10 flex items-start gap-3 px-4 py-4">
-        <div className="mt-0.5 rounded-lg bg-muted p-2 text-muted-foreground">
-          <WandSparklesIcon className="size-4" />
-        </div>
+      <div
+        className={cn(
+          "pointer-events-none relative z-10 flex items-center gap-3 px-3 py-3 transition-opacity",
+          !enabled && "opacity-70"
+        )}
+      >
+        <SkillIcon iconUrl={skill.iconUrl} />
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{skill.name}</p>
-              <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                {skill.description}
-              </p>
-            </div>
+        <div className="min-w-0 flex flex-1 items-center justify-between gap-3">
+          <div className="min-w-0 flex-1 font-medium">
+            <p className="truncate text-md">{skill.name}</p>
+            <p className="line-clamp-1 text-xs leading-5 text-muted-foreground">
+              {skill.description}
+            </p>
+          </div>
 
-            <div className="pointer-events-auto relative z-20 flex shrink-0 items-center gap-2">
-              {skill.canUninstall && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      aria-label={moreActionsLabel}
-                    >
-                      <MoreHorizontalIcon className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onSelect={() => onRequestUninstall(skill)}
-                    >
-                      <Trash2Icon className="size-4" />
-                      <span>{uninstallLabel}</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+          <div className="pointer-events-auto relative z-20 flex shrink-0 items-center gap-2 self-center">
+            {skill.canUninstall && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label={moreActionsLabel}
+                  >
+                    <MoreHorizontalIcon className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => onRequestUninstall(skill)}
+                  >
+                    <Trash2Icon className="size-4" />
+                    <span>{uninstallLabel}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
-              <Switch
-                aria-label={toggleEnabledLabel}
-                checked={enabled}
-                onCheckedChange={checked => onToggleEnabled(skill.id, checked)}
-              />
-            </div>
+            <Switch
+              aria-label={toggleEnabledLabel}
+              checked={enabled}
+              onCheckedChange={checked => onToggleEnabled(skill.id, checked)}
+            />
           </div>
         </div>
       </div>
@@ -225,13 +272,12 @@ export function SkillsPane({ disabledSkillIds, setDisabledSkillIds }: SkillsPane
   const [isLoadingDetail, setIsLoadingDetail] = useState(false)
   const [pendingUninstallSkill, setPendingUninstallSkill] = useState<SkillListItem | null>(null)
   const [isUninstalling, setIsUninstalling] = useState(false)
-  const [isBundledSectionOpen, setIsBundledSectionOpen] = useState(true)
-  const [isUserSectionOpen, setIsUserSectionOpen] = useState(false)
-  const [hasUserSectionBeenToggled, setHasUserSectionBeenToggled] = useState(false)
   const disabledSkillIdsRef = useRef(disabledSkillIds)
   const toggleQueueRef = useRef<Promise<void>>(Promise.resolve())
 
   const { bundledSkills, userSkills } = useMemo(() => splitSkillsBySource(skills), [skills])
+  const isSelectedSkillDisabled =
+    selectedSkillDetail && disabledSkillIds.includes(selectedSkillDetail.id)
 
   useEffect(() => {
     disabledSkillIdsRef.current = disabledSkillIds
@@ -265,14 +311,6 @@ export function SkillsPane({ disabledSkillIds, setDisabledSkillIds }: SkillsPane
   useEffect(() => {
     void loadSkills()
   }, [loadSkills])
-
-  useEffect(() => {
-    if (hasUserSectionBeenToggled) {
-      return
-    }
-
-    setIsUserSectionOpen(userSkills.length > 0)
-  }, [hasUserSectionBeenToggled, userSkills.length])
 
   useEffect(() => {
     if (!selectedSkillId) {
@@ -425,25 +463,19 @@ export function SkillsPane({ disabledSkillIds, setDisabledSkillIds }: SkillsPane
 
       <ScrollArea className="min-h-0 flex-1">
         <div
-          className="mx-auto flex w-full flex-col gap-5 px-6 py-5"
+          className="mx-auto flex w-full flex-col gap-5 px-5 py-5"
           style={{ maxWidth: `${SKILLS_PANE_MAX_WIDTH_PX}px` }}
         >
           <SkillsSection
             title={t("skills.bundledSectionTitle")}
             description={t("skills.bundledSectionDescription")}
-            count={bundledSkills.length}
-            open={isBundledSectionOpen}
-            onOpenChange={setIsBundledSectionOpen}
           >
             {isLoading ? (
               <div className={SKILL_CARD_GRID_CLASS}>
                 {SKILL_CARD_SKELETON_IDS.map(skeletonId => (
                   <div
                     key={skeletonId}
-                    className={cn(
-                      "rounded-xl border bg-background px-4 py-4",
-                      SKILL_CARD_WIDTH_CLASS
-                    )}
+                    className={cn("rounded-2xl bg-muted/30 px-3 py-3", SKILL_CARD_WIDTH_CLASS)}
                   >
                     <Skeleton className="h-4 w-28" />
                     <Skeleton className="mt-3 h-3 w-full" />
@@ -478,20 +510,14 @@ export function SkillsPane({ disabledSkillIds, setDisabledSkillIds }: SkillsPane
           <SkillsSection
             title={t("skills.userSectionTitle")}
             description={t("skills.userSectionDescription")}
-            count={userSkills.length}
-            open={isUserSectionOpen}
-            onOpenChange={nextOpen => {
-              setHasUserSectionBeenToggled(true)
-              setIsUserSectionOpen(nextOpen)
-            }}
           >
             {isLoading ? (
-              <div className="rounded-xl border bg-background px-4 py-4">
+              <div className="rounded-2xl bg-muted/30 px-3 py-3">
                 <Skeleton className="h-4 w-36" />
                 <Skeleton className="mt-3 h-3 w-full" />
               </div>
             ) : userSkills.length === 0 ? (
-              <div className="rounded-xl border border-dashed bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
+              <div className="bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
                 {t("skills.emptyUser")}
               </div>
             ) : (
@@ -521,15 +547,16 @@ export function SkillsPane({ disabledSkillIds, setDisabledSkillIds }: SkillsPane
         onOpenChange={open => !open && setSelectedSkillId(null)}
       >
         <DialogContent showCloseButton={false} className={SKILL_DETAIL_DIALOG_CLASS}>
-          <div className="space-y-0">
-            <div className="flex items-center justify-between gap-4">
-              <div className="rounded-lg bg-muted p-2 text-muted-foreground">
-                <WandSparklesIcon className="size-4" />
-              </div>
+          <div className="shrink-0 space-y-0">
+            <div className="flex items-start justify-between gap-4">
+              <SkillIcon
+                iconUrl={selectedSkillDetail?.iconUrl}
+                className="size-12 rounded-xl bg-muted"
+              />
 
               <DialogClose
                 className={cn(
-                  "rounded-xs opacity-70 transition-opacity hover:opacity-100",
+                  "self-start rounded-xs opacity-70 transition-opacity hover:opacity-100",
                   "data-[state=open]:bg-accent data-[state=open]:text-muted-foreground",
                   "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
                 )}
@@ -541,30 +568,37 @@ export function SkillsPane({ disabledSkillIds, setDisabledSkillIds }: SkillsPane
 
             <div className="flex items-start justify-between gap-4 pt-4 pb-2">
               <DialogHeader className="min-w-0 flex-1 text-left">
-                <DialogTitle className="text-2xl">
-                  {selectedSkillDetail?.name ?? t("skills.title")}
-                </DialogTitle>
+                <div className="flex min-w-0 items-center gap-2">
+                  <DialogTitle className="truncate text-2xl">
+                    {selectedSkillDetail?.name ?? t("skills.title")}
+                  </DialogTitle>
+                  {isSelectedSkillDisabled && (
+                    <span className="shrink-0 rounded-full border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      {t("skills.disabledBadge")}
+                    </span>
+                  )}
+                </div>
               </DialogHeader>
 
               <Button
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="shrink-0 text-muted-foreground text-xs"
+                className="shrink-0 text-muted-foreground text-xs gap-1"
                 onClick={() => void handleRevealSkillDirectory()}
                 disabled={!selectedSkillDetail?.filePath}
               >
                 {t("skills.openFolder")}
-                <MoveUpRightIcon className="size-3" />
+                <ArrowUpRightIcon className="size-4" />
               </Button>
             </div>
 
-            <DialogDescription className="text-left text-sm">
+            <DialogDescription className="text-left text-sm font-medium">
               {selectedSkillDetail?.description ?? ""}
             </DialogDescription>
           </div>
 
-          <div className="h-[55vh] w-full min-w-0 max-w-full max-h-144 overflow-y-auto overflow-x-hidden overscroll-contain rounded-md border bg-muted/10">
+          <div className="min-h-0 flex-1 w-full min-w-0 max-w-full overflow-y-auto overflow-x-hidden overscroll-contain rounded-md border bg-muted/10">
             <div className="w-full min-w-0 max-w-full px-4 pt-2 pb-4">
               {isLoadingDetail ? (
                 <div className="space-y-3">

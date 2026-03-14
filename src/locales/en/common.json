@@ -78,6 +78,7 @@
     "moreActions": "More actions for {{name}}",
     "enableDisable": "Enable or disable {{name}}",
     "openFolderError": "Failed to open the folder.",
+    "disabledBadge": "Disabled",
     "contentTitle": "Skill Content",
     "uninstall": "Uninstall",
     "uninstalling": "Uninstalling",

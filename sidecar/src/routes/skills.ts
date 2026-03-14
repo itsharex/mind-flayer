@@ -4,6 +4,8 @@ import {
   getSkillById,
   getSkillDetailById,
   parseSkillId,
+  type SkillCatalogDetail,
+  type SkillCatalogEntry,
   uninstallUserSkill
 } from "../skills/catalog"
 import {
@@ -13,13 +15,43 @@ import {
   NotFoundError
 } from "../utils/http-errors"
 
+function toLocalImageUrl(c: Context, imagePath: string | null): string | null {
+  if (!imagePath) {
+    return null
+  }
+
+  const localImageUrl = new URL("/api/local-image", c.req.url)
+  localImageUrl.searchParams.set("path", imagePath)
+  return localImageUrl.toString()
+}
+
+function serializeSkill(c: Context, skill: SkillCatalogEntry) {
+  return {
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    iconUrl: toLocalImageUrl(c, skill.iconPath),
+    source: skill.source,
+    canUninstall: skill.canUninstall,
+    location: skill.location,
+    filePath: skill.filePath
+  }
+}
+
+function serializeSkillDetail(c: Context, skill: SkillCatalogDetail) {
+  return {
+    ...serializeSkill(c, skill),
+    bodyMarkdown: skill.bodyMarkdown
+  }
+}
+
 export async function handleListSkills(c: Context) {
   try {
     const skills = await discoverSkills()
 
     return c.json({
       success: true,
-      skills
+      skills: skills.map(skill => serializeSkill(c, skill))
     })
   } catch (error) {
     console.error("[sidecar] List skills error:", error)
@@ -42,7 +74,7 @@ export async function handleGetSkillDetail(c: Context) {
 
     return c.json({
       success: true,
-      skill
+      skill: serializeSkillDetail(c, skill)
     })
   } catch (error) {
     console.error("[sidecar] Get skill detail error:", error)
