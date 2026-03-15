@@ -44,6 +44,24 @@ const expectedMinimaxPricing = {
   }
 } as const
 
+const expectedModelProviderCatalog = {
+  minimax: {
+    name: "MiniMax",
+    defaultBaseUrl: "https://api.minimaxi.com/anthropic/v1",
+    modelIds: Object.keys(expectedMinimaxPricing)
+  },
+  openai: {
+    name: "OpenAI",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    modelIds: ["gpt-5.4-pro", "gpt-5.4", "gpt-5.3-chat-latest"]
+  },
+  anthropic: {
+    name: "Anthropic",
+    defaultBaseUrl: "https://api.anthropic.com/v1",
+    modelIds: ["claude-opus-4-6", "claude-sonnet-4-6"]
+  }
+} as const
+
 describe("MODEL_PROVIDERS minimax pricing", () => {
   it("matches the expected minimax model set and excludes M2-her", () => {
     const minimaxProvider = MODEL_PROVIDERS.find(provider => provider.id === "minimax")
@@ -85,6 +103,18 @@ describe("MODEL_PROVIDERS supported providers", () => {
 
     expect(providerIds).toContain("openai")
     expect(providerIds).toContain("anthropic")
+  })
+
+  it("pins the exact catalog metadata for active model providers", () => {
+    for (const [providerId, expected] of Object.entries(expectedModelProviderCatalog)) {
+      const provider = MODEL_PROVIDERS.find(item => item.id === providerId)
+
+      expect(provider).toBeDefined()
+      expect(provider?.id).toBe(providerId)
+      expect(provider?.name).toBe(expected.name)
+      expect(provider?.defaultBaseUrl).toBe(expected.defaultBaseUrl)
+      expect(provider?.models?.map(model => model.api_id)).toEqual(expected.modelIds)
+    }
   })
 
   it("does not keep openai or anthropic in upcoming providers", () => {
