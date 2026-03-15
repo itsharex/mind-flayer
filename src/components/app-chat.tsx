@@ -14,7 +14,7 @@ import {
   type ToolUIPart,
   type UIMessage
 } from "ai"
-import { AtomIcon, CircleIcon, GlobeIcon, SparklesIcon, ZapIcon } from "lucide-react"
+import { BrainIcon, CircleIcon, GlobeIcon, SparklesIcon, ZapIcon } from "lucide-react"
 import { nanoid } from "nanoid"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -87,6 +87,7 @@ import { generateTitle, getSidecarUrl } from "@/lib/sidecar-client"
 import { cn } from "@/lib/utils"
 import { openSettingsWindow, SettingsSection } from "@/lib/window-manager"
 import type { ChatId, MessageId, Chat as StoredChat } from "@/types/chat"
+import type { ReasoningEffort } from "@/types/settings"
 
 interface AppChatProps {
   activeChatId?: ChatId | null
@@ -194,7 +195,8 @@ const AppChatInner = ({
   const [selectedModelApiId, setSelectedModelApiId] = useSetting("selectedModelApiId")
   const [useWebSearch, setUseWebSearch] = useSetting("webSearchEnabled")
   const [webSearchMode, setWebSearchMode] = useSetting("webSearchMode")
-  const [useDeepThink, setUseDeepThink] = useSetting("deepThinkEnabled")
+  const [reasoningEnabled, setReasoningEnabled] = useSetting("reasoningEnabled")
+  const [preferredReasoningEffort, setPreferredReasoningEffort] = useSetting("reasoningEffort")
 
   const selectedModel =
     availableModels.find(m => m.api_id === selectedModelApiId) ?? availableModels[0] ?? null
@@ -204,6 +206,8 @@ const AppChatInner = ({
   const selectedModelRef = useLatest(selectedModel)
   const useWebSearchRef = useLatest(useWebSearch)
   const webSearchModeRef = useLatest(webSearchMode)
+  const reasoningEnabledRef = useLatest(reasoningEnabled)
+  const reasoningEffortRef = useLatest(preferredReasoningEffort)
   const inputContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<PromptInputTextareaHandle>(null)
   const spacerElementRef = useRef<HTMLDivElement>(null)
@@ -587,6 +591,8 @@ const AppChatInner = ({
               "X-Model-Id": selectedModelRef.current?.api_id ?? "",
               "X-Use-Web-Search": useWebSearchRef.current.toString(),
               "X-Web-Search-Mode": webSearchModeRef.current,
+              "X-Reasoning-Enabled": reasoningEnabledRef.current.toString(),
+              "X-Reasoning-Effort": reasoningEffortRef.current,
               "X-Chat-Id": chatId
             })
           }),
@@ -742,7 +748,9 @@ const AppChatInner = ({
       onChatReplyingChange,
       isDesktopChatPaneActive,
       sidecarApi,
+      reasoningEnabledRef,
       useWebSearchRef,
+      reasoningEffortRef,
       webSearchModeRef
     ]
   )
@@ -1474,26 +1482,30 @@ const AppChatInner = ({
                     onEnabledChange={setUseWebSearch}
                     collapsed={isCondensed}
                     modes={[
-                      {
-                        ...toolButtonConstants.webSearch.modes.auto,
-                        icon: SparklesIcon
-                      },
-                      {
-                        ...toolButtonConstants.webSearch.modes.always,
-                        icon: ZapIcon
-                      }
+                      { ...toolButtonConstants.webSearch.modes.auto, icon: SparklesIcon },
+                      { ...toolButtonConstants.webSearch.modes.always, icon: ZapIcon }
                     ]}
                     selectedMode={webSearchMode}
                     onModeChange={mode => setWebSearchMode(mode as "auto" | "always")}
                   />
 
                   <ToolButton
-                    icon={AtomIcon}
-                    label={toolButtonConstants.deepThink.label}
-                    tooltip={toolButtonConstants.deepThink.tooltip}
-                    enabled={useDeepThink}
-                    onEnabledChange={setUseDeepThink}
+                    icon={BrainIcon}
+                    label={toolButtonConstants.reasoning.label}
+                    tooltip={toolButtonConstants.reasoning.tooltip}
+                    panelDescription={toolButtonConstants.reasoning.description}
+                    enabled={reasoningEnabled}
+                    onEnabledChange={setReasoningEnabled}
                     collapsed={isCondensed}
+                    modes={[
+                      { ...toolButtonConstants.reasoning.modes.default, icon: BrainIcon },
+                      { ...toolButtonConstants.reasoning.modes.low, icon: BrainIcon },
+                      { ...toolButtonConstants.reasoning.modes.medium, icon: BrainIcon },
+                      { ...toolButtonConstants.reasoning.modes.high, icon: BrainIcon },
+                      { ...toolButtonConstants.reasoning.modes.xhigh, icon: BrainIcon }
+                    ]}
+                    selectedMode={preferredReasoningEffort}
+                    onModeChange={mode => setPreferredReasoningEffort(mode as ReasoningEffort)}
                   />
                 </PromptInputTools>
 

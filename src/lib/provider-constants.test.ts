@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { MODEL_PROVIDERS } from "@/lib/provider-constants"
+import {
+  ALL_PROVIDERS,
+  DEFAULT_FORM_DATA,
+  MODEL_PROVIDERS,
+  UPCOMING_PROVIDERS
+} from "@/lib/provider-constants"
 
 const expectedMinimaxPricing = {
   "MiniMax-M2.5": {
@@ -39,6 +44,24 @@ const expectedMinimaxPricing = {
   }
 } as const
 
+const expectedModelProviderCatalog = {
+  minimax: {
+    name: "MiniMax",
+    defaultBaseUrl: "https://api.minimaxi.com/anthropic/v1",
+    modelIds: Object.keys(expectedMinimaxPricing)
+  },
+  openai: {
+    name: "OpenAI",
+    defaultBaseUrl: "https://api.openai.com/v1",
+    modelIds: ["gpt-5.4-pro", "gpt-5.4", "gpt-5.3-chat-latest"]
+  },
+  anthropic: {
+    name: "Anthropic",
+    defaultBaseUrl: "https://api.anthropic.com/v1",
+    modelIds: ["claude-opus-4-6", "claude-sonnet-4-6"]
+  }
+} as const
+
 describe("MODEL_PROVIDERS minimax pricing", () => {
   it("matches the expected minimax model set and excludes M2-her", () => {
     const minimaxProvider = MODEL_PROVIDERS.find(provider => provider.id === "minimax")
@@ -70,6 +93,53 @@ describe("MODEL_PROVIDERS minimax pricing", () => {
       expect(expectedPricing).toBeDefined()
       expect(model.pricing).toEqual(expectedPricing)
       expect(model.pricing?.currency).toBe("CNY")
+    }
+  })
+})
+
+describe("MODEL_PROVIDERS supported providers", () => {
+  it("includes openai and anthropic as active model providers", () => {
+    const providerIds = MODEL_PROVIDERS.map(provider => provider.id)
+
+    expect(providerIds).toContain("openai")
+    expect(providerIds).toContain("anthropic")
+  })
+
+  it("pins the exact catalog metadata for active model providers", () => {
+    for (const [providerId, expected] of Object.entries(expectedModelProviderCatalog)) {
+      const provider = MODEL_PROVIDERS.find(item => item.id === providerId)
+
+      expect(provider).toBeDefined()
+      expect(provider?.id).toBe(providerId)
+      expect(provider?.name).toBe(expected.name)
+      expect(provider?.defaultBaseUrl).toBe(expected.defaultBaseUrl)
+      expect(provider?.models?.map(model => model.api_id)).toEqual(expected.modelIds)
+    }
+  })
+
+  it("does not keep openai or anthropic in upcoming providers", () => {
+    const upcomingProviderIds = UPCOMING_PROVIDERS.map(provider => provider.id)
+
+    expect(upcomingProviderIds).not.toContain("openai")
+    expect(upcomingProviderIds).not.toContain("anthropic")
+  })
+
+  it("does not mark openai or anthropic as disabled", () => {
+    const openaiProvider = MODEL_PROVIDERS.find(provider => provider.id === "openai")
+    const anthropicProvider = MODEL_PROVIDERS.find(provider => provider.id === "anthropic")
+
+    expect(openaiProvider?.disabled ?? false).toBe(false)
+    expect(anthropicProvider?.disabled ?? false).toBe(false)
+  })
+})
+
+describe("DEFAULT_FORM_DATA", () => {
+  it("includes form entries for all providers", () => {
+    for (const provider of ALL_PROVIDERS) {
+      expect(DEFAULT_FORM_DATA[provider.id]).toEqual({
+        apiKey: "",
+        baseUrl: ""
+      })
     }
   })
 })
