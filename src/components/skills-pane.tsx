@@ -500,7 +500,7 @@ export function SkillsPane({ disabledSkillIds, setDisabledSkillIds }: SkillsPane
                 ))}
               </div>
             ) : bundledSkills.length === 0 ? (
-              <div className="rounded-xl border border-dashed bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
+              <div className="bg-muted/10 px-4 py-6 text-sm text-muted-foreground">
                 {t("skills.emptyBundled")}
               </div>
             ) : (

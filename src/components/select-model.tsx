@@ -126,5 +126,5 @@ function SelectModel({ className, value, onChange, ...props }: SelectModelProps)
   )
 }
 
-export { SelectModel }
 export type { ModelOption }
+export { SelectModel }

@@ -19,7 +19,7 @@ export type { ITool } from "./base-tool"
 export { ToolRegistry } from "./registry"
 
 // Keep exporting tool factories for backward compatibility during refactoring
-export { webSearchTool, bashExecutionTool, readTool }
+export { bashExecutionTool, readTool, webSearchTool }
 
 // Type for all available tools (used by AI SDK)
 export type AllTools = {
