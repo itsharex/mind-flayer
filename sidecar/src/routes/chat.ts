@@ -82,7 +82,6 @@ export async function handleChat(
       webSearchMode,
       messages
     })
-    console.log("[sidecar] Tool choice:", toolChoice)
 
     // Combine request abort signal with global abort controller
     const abortSignal = AbortSignal.any([c.req.raw.signal, globalAbortController.signal])
