@@ -20,7 +20,9 @@ import { buildSystemPrompt } from "../utils/system-prompt-builder"
 export interface StreamHandlerOptions {
   model: LanguageModel
   modelProvider: string
+  modelProviderLabel?: string
   modelId: string
+  modelLabel?: string
   messages: UIMessage[]
   tools: ToolSet
   toolChoice: ToolChoice<ToolSet>
@@ -41,7 +43,9 @@ export async function createStreamResponse(options: StreamHandlerOptions) {
   const {
     model,
     modelProvider,
+    modelProviderLabel,
     modelId,
+    modelLabel,
     messages,
     tools,
     toolChoice,
@@ -55,7 +59,13 @@ export async function createStreamResponse(options: StreamHandlerOptions) {
     processMessages(messages, tools)
   ])
   const enabledSkills = filterDisabledSkills(skills, options.disabledSkillIds ?? [])
-  const systemPrompt = buildSystemPrompt({ modelProvider, modelId, skills: enabledSkills })
+  const systemPrompt = buildSystemPrompt({
+    modelProvider,
+    modelProviderLabel,
+    modelId,
+    modelLabel,
+    skills: enabledSkills
+  })
   console.info("[sidecar] systemPrompt:", systemPrompt)
   console.dir({ prunedMessages }, { depth: null })
 

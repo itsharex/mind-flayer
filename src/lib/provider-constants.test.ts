@@ -3,6 +3,7 @@ import {
   ALL_PROVIDERS,
   DEFAULT_FORM_DATA,
   MODEL_PROVIDERS,
+  sortProvidersByAvailabilityAndName,
   UPCOMING_PROVIDERS
 } from "@/lib/provider-constants"
 
@@ -141,5 +142,30 @@ describe("DEFAULT_FORM_DATA", () => {
         baseUrl: ""
       })
     }
+  })
+})
+
+describe("sortProvidersByAvailabilityAndName", () => {
+  it("orders available providers first and sorts each group alphabetically", () => {
+    const providers = [
+      { id: "openai", name: "OpenAI" },
+      { id: "anthropic", name: "Anthropic" },
+      { id: "gemini", name: "Gemini", disabled: true },
+      { id: "minimax", name: "MiniMax" }
+    ]
+
+    const sortedProviders = sortProvidersByAvailabilityAndName(providers, {
+      openai: true,
+      anthropic: false,
+      gemini: true,
+      minimax: true
+    })
+
+    expect(sortedProviders.map(provider => provider.id)).toEqual([
+      "minimax",
+      "openai",
+      "anthropic",
+      "gemini"
+    ])
   })
 })

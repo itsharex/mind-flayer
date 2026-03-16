@@ -6,7 +6,12 @@ describe("ChannelRuntimeConfigService", () => {
     const service = new ChannelRuntimeConfigService()
 
     service.update({
-      selectedModel: { provider: "minimax", modelId: "model-a" },
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
       channels: {
         telegram: {
           enabled: true,
@@ -26,7 +31,12 @@ describe("ChannelRuntimeConfigService", () => {
     })
 
     service.update({
-      selectedModel: { provider: "minimax", modelId: "model-b" },
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-b",
+        modelLabel: "MiniMax-M2.1"
+      },
       channels: {
         telegram: {
           enabled: false,
@@ -36,7 +46,12 @@ describe("ChannelRuntimeConfigService", () => {
     })
 
     expect(service.getConfig()).toMatchObject({
-      selectedModel: { provider: "minimax", modelId: "model-b" },
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-b",
+        modelLabel: "MiniMax-M2.1"
+      },
       channels: {
         telegram: {
           enabled: false,

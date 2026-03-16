@@ -72,7 +72,9 @@ describe("createStreamResponse", () => {
     const response = await createStreamResponse({
       model: {} as never,
       modelProvider: "minimax",
+      modelProviderLabel: "MiniMax",
       modelId: "model-a",
+      modelLabel: "MiniMax-M2.5",
       messages: [{ role: "user", parts: [] }] as never,
       tools: {},
       toolChoice: "auto" as never,
@@ -85,7 +87,9 @@ describe("createStreamResponse", () => {
     expect(response).toBe("stream-response")
     expect(buildSystemPromptMock).toHaveBeenCalledWith({
       modelProvider: "minimax",
+      modelProviderLabel: "MiniMax",
       modelId: "model-a",
+      modelLabel: "MiniMax-M2.5",
       skills: [
         {
           id: "bundled:reader",

@@ -6,7 +6,9 @@ import { BadRequestError, mapErrorToResponse } from "../utils/http-errors"
 
 const selectedModelSchema = z.object({
   provider: z.string().trim().min(1),
-  modelId: z.string().trim().min(1)
+  providerLabel: z.string().trim().min(1).optional(),
+  modelId: z.string().trim().min(1),
+  modelLabel: z.string().trim().min(1).optional()
 })
 
 const channelRuntimeConfigSchema = z.object({

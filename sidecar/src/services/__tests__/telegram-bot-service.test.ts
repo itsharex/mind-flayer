@@ -141,7 +141,12 @@ describe("TelegramBotService", () => {
 
     const runtimeConfigService = new ChannelRuntimeConfigService()
     runtimeConfigService.update({
-      selectedModel: { provider: "minimax", modelId: "model-a" },
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
       channels: {
         telegram: {
           enabled: true,
@@ -210,7 +215,12 @@ describe("TelegramBotService", () => {
 
     const runtimeConfigService = new ChannelRuntimeConfigService()
     runtimeConfigService.update({
-      selectedModel: { provider: "minimax", modelId: "model-a" },
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
       channels: {
         telegram: {
           enabled: true,
@@ -282,7 +292,12 @@ describe("TelegramBotService", () => {
 
     const runtimeConfigService = new ChannelRuntimeConfigService()
     runtimeConfigService.update({
-      selectedModel: { provider: "minimax", modelId: "model-a" },
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
       channels: {
         telegram: {
           enabled: true,
@@ -470,7 +485,12 @@ describe("TelegramBotService", () => {
 
     const runtimeConfigService = new ChannelRuntimeConfigService()
     runtimeConfigService.update({
-      selectedModel: { provider: "minimax", modelId: "model-a" },
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
       channels: {
         telegram: {
           enabled: true,
@@ -508,7 +528,9 @@ describe("TelegramBotService", () => {
 
     expect(buildSystemPromptMock).toHaveBeenCalledWith({
       modelProvider: "minimax",
+      modelProviderLabel: "MiniMax",
       modelId: "model-a",
+      modelLabel: "MiniMax-M2.5",
       channel: "telegram",
       skills: []
     })
@@ -558,7 +580,12 @@ describe("TelegramBotService", () => {
 
     const runtimeConfigService = new ChannelRuntimeConfigService()
     runtimeConfigService.update({
-      selectedModel: { provider: "minimax", modelId: "model-a" },
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
       channels: {
         telegram: {
           enabled: true,
@@ -596,7 +623,9 @@ describe("TelegramBotService", () => {
 
     expect(buildSystemPromptMock).toHaveBeenCalledWith({
       modelProvider: "minimax",
+      modelProviderLabel: "MiniMax",
       modelId: "model-a",
+      modelLabel: "MiniMax-M2.5",
       channel: "telegram",
       skills: []
     })
@@ -652,7 +681,12 @@ describe("TelegramBotService", () => {
 
     const runtimeConfigService = new ChannelRuntimeConfigService()
     runtimeConfigService.update({
-      selectedModel: { provider: "minimax", modelId: "model-a" },
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
       channels: {
         telegram: {
           enabled: true,
@@ -691,7 +725,9 @@ describe("TelegramBotService", () => {
 
     expect(buildSystemPromptMock).toHaveBeenCalledWith({
       modelProvider: "minimax",
+      modelProviderLabel: "MiniMax",
       modelId: "model-a",
+      modelLabel: "MiniMax-M2.5",
       channel: "telegram",
       skills: [
         {

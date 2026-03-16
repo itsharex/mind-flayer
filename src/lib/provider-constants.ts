@@ -201,6 +201,25 @@ export const ALL_PROVIDERS = [
   ...UPCOMING_PROVIDERS
 ]
 
+const providerNameCollator = new Intl.Collator("en", {
+  sensitivity: "base"
+})
+
+export function sortProvidersByAvailabilityAndName<
+  T extends Pick<Provider, "id" | "name" | "disabled">
+>(providers: readonly T[], enabledProviders: Record<string, boolean>): T[] {
+  return [...providers].sort((left: T, right: T) => {
+    const leftAvailable = !(left.disabled ?? false) && (enabledProviders[left.id] ?? false)
+    const rightAvailable = !(right.disabled ?? false) && (enabledProviders[right.id] ?? false)
+
+    if (leftAvailable !== rightAvailable) {
+      return leftAvailable ? -1 : 1
+    }
+
+    return providerNameCollator.compare(left.name, right.name)
+  })
+}
+
 export function findModelPricing(
   providerId: string | null | undefined,
   modelId: string | null | undefined

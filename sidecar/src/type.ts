@@ -5,7 +5,9 @@ export interface ProviderConfig {
 
 export interface SelectedModelRuntime {
   provider: string
+  providerLabel?: string
   modelId: string
+  modelLabel?: string
 }
 
 export interface RuntimeConfig {

@@ -588,7 +588,9 @@ const AppChatInner = ({
             api: sidecarApi,
             headers: () => ({
               "X-Model-Provider": selectedModelRef.current?.provider ?? "",
+              "X-Model-Provider-Label": selectedModelRef.current?.providerLabel ?? "",
               "X-Model-Id": selectedModelRef.current?.api_id ?? "",
+              "X-Model-Label": selectedModelRef.current?.label ?? "",
               "X-Use-Web-Search": useWebSearchRef.current.toString(),
               "X-Web-Search-Mode": webSearchModeRef.current,
               "X-Reasoning-Enabled": reasoningEnabledRef.current.toString(),

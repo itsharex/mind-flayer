@@ -644,7 +644,9 @@ export class TelegramBotService {
         model,
         system: buildSystemPrompt({
           modelProvider: selectedModel.provider,
+          modelProviderLabel: selectedModel.providerLabel,
           modelId: selectedModel.modelId,
+          modelLabel: selectedModel.modelLabel,
           channel: "telegram",
           skills: enabledSkills
         }),

@@ -64,14 +64,18 @@ function createRuntimeConfigSettingsSnapshot(
 function createRuntimeConfigPayload(
   settingsSnapshot: RuntimeConfigSettingsSnapshot,
   selectedModelProvider: string | null,
-  selectedModelId: string | null
+  selectedModelProviderLabel: string | null,
+  selectedModelId: string | null,
+  selectedModelLabel: string | null
 ): RuntimeConfigPayload {
   return {
     selectedModel:
       selectedModelProvider && selectedModelId
         ? {
             provider: selectedModelProvider,
-            modelId: selectedModelId
+            ...(selectedModelProviderLabel ? { providerLabel: selectedModelProviderLabel } : {}),
+            modelId: selectedModelId,
+            ...(selectedModelLabel ? { modelLabel: selectedModelLabel } : {})
           }
         : null,
     channels: {
@@ -149,7 +153,9 @@ export default function Page() {
   const selectedModel =
     availableModels.find(model => model.api_id === selectedModelApiId) ?? availableModels[0] ?? null
   const selectedModelProvider = selectedModel?.provider ?? null
+  const selectedModelProviderLabel = selectedModel?.providerLabel ?? null
   const selectedModelId = selectedModel?.api_id ?? null
+  const selectedModelLabel = selectedModel?.label ?? null
 
   useEffect(() => {
     activeChatIdRef.current = activeChatId
@@ -193,7 +199,9 @@ export default function Page() {
     const payload = createRuntimeConfigPayload(
       settingsSnapshot,
       selectedModelProvider,
-      selectedModelId
+      selectedModelProviderLabel,
+      selectedModelId,
+      selectedModelLabel
     )
 
     runtimeConfigSyncQueueRef.current = runtimeConfigSyncQueueRef.current
@@ -246,7 +254,9 @@ export default function Page() {
     restoreRuntimeConfigSnapshot,
     selectedModelApiId,
     selectedModelId,
+    selectedModelLabel,
     selectedModelProvider,
+    selectedModelProviderLabel,
     t,
     telegramAllowedUserIds
   ])

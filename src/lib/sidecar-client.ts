@@ -37,7 +37,9 @@ export async function getSidecarUrl(
 export interface RuntimeConfigPayload {
   selectedModel: {
     provider: string
+    providerLabel?: string
     modelId: string
+    modelLabel?: string
   } | null
   channels: {
     telegram: {

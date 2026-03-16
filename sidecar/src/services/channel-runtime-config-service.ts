@@ -27,7 +27,13 @@ export class ChannelRuntimeConfigService {
       selectedModel: nextConfig.selectedModel
         ? {
             provider: nextConfig.selectedModel.provider,
-            modelId: nextConfig.selectedModel.modelId
+            ...(nextConfig.selectedModel.providerLabel
+              ? { providerLabel: nextConfig.selectedModel.providerLabel.trim() }
+              : {}),
+            modelId: nextConfig.selectedModel.modelId,
+            ...(nextConfig.selectedModel.modelLabel
+              ? { modelLabel: nextConfig.selectedModel.modelLabel.trim() }
+              : {})
           }
         : null,
       channels: {

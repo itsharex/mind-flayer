@@ -21,6 +21,7 @@ import { openSettingsWindow, SettingsSection } from "@/lib/window-manager"
 
 interface ModelOption {
   provider: string
+  providerLabel: string
   label: string
   api_id: string
   contextWindow?: number | null
