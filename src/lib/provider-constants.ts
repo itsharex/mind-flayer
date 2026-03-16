@@ -113,7 +113,7 @@ export const MODEL_PROVIDERS: Provider[] = [
       {
         label: "GPT-5.4-Pro",
         api_id: "gpt-5.4-pro",
-        contextWindow: 1050000,
+        contextWindow: 1_050_000,
         pricing: {
           currency: "USD",
           input: 30,
@@ -125,7 +125,7 @@ export const MODEL_PROVIDERS: Provider[] = [
       {
         label: "GPT-5.4",
         api_id: "gpt-5.4",
-        contextWindow: 1050000,
+        contextWindow: 1_050_000,
         pricing: {
           currency: "USD",
           input: 2.5,
@@ -137,7 +137,7 @@ export const MODEL_PROVIDERS: Provider[] = [
       {
         label: "GPT-5.3-Chat-Latest",
         api_id: "gpt-5.3-chat-latest",
-        contextWindow: 128000,
+        contextWindow: 128_000,
         pricing: {
           currency: "USD",
           input: 1.75,
@@ -159,7 +159,7 @@ export const MODEL_PROVIDERS: Provider[] = [
       {
         label: "Claude Opus 4.6",
         api_id: "claude-opus-4-6",
-        contextWindow: 1000000,
+        contextWindow: 1_000_000,
         pricing: {
           currency: "USD",
           input: 5,
@@ -171,7 +171,7 @@ export const MODEL_PROVIDERS: Provider[] = [
       {
         label: "Claude Sonnet 4.6",
         api_id: "claude-sonnet-4-6",
-        contextWindow: 1000000,
+        contextWindow: 1_000_000,
         pricing: {
           currency: "USD",
           input: 3,
