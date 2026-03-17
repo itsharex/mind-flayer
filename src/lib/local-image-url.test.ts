@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { resolveLocalImageUrl } from "@/lib/local-image-url"
+import { normalizeLocalImageMarkdown, resolveLocalImageUrl } from "@/lib/local-image-url"
 
 const SIDECAR_ORIGIN = "http://localhost:21420"
 
@@ -43,6 +43,31 @@ describe("resolveLocalImageUrl", () => {
     const source = `${SIDECAR_ORIGIN}/api/local-image?path=${encodeURIComponent("/Users/didi/Desktop/a.png")}`
     expect(resolveLocalImageUrl(source, SIDECAR_ORIGIN, { cacheBustKey: "render-2" })).toBe(
       `${source}&_ts=render-2`
+    )
+  })
+})
+
+describe("normalizeLocalImageMarkdown", () => {
+  it("encodes whitespace in file URL image destinations", () => {
+    expect(
+      normalizeLocalImageMarkdown(
+        "![local](file:///Users/didi/Library/Application Support/Mind Flayer/shot.png)"
+      )
+    ).toBe("![local](file:///Users/didi/Library/Application%20Support/Mind%20Flayer/shot.png)")
+  })
+
+  it("encodes whitespace in absolute local image destinations", () => {
+    expect(
+      normalizeLocalImageMarkdown("![local](/Users/didi/Desktop/blog shots/soonwang me.png)")
+    ).toBe("![local](/Users/didi/Desktop/blog%20shots/soonwang%20me.png)")
+  })
+
+  it("keeps non-local or already valid markdown unchanged", () => {
+    expect(normalizeLocalImageMarkdown("![remote](https://example.com/a b.png)")).toBe(
+      "![remote](https://example.com/a b.png)"
+    )
+    expect(normalizeLocalImageMarkdown("![local](file:///Users/didi/Desktop/shot.png)")).toBe(
+      "![local](file:///Users/didi/Desktop/shot.png)"
     )
   })
 })
