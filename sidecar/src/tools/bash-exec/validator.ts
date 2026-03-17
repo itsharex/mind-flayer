@@ -8,11 +8,14 @@
  * These are read-only or informational commands
  */
 export const SAFE_COMMANDS = [
+  "agent-browser",
   "arch",
   "basename",
   "cal",
   "cat",
+  "claude",
   "cmp",
+  "codex",
   "comm",
   "cut",
   "date",
