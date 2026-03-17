@@ -12,7 +12,9 @@ type SkillPromptEntry = Pick<
 
 export interface BuildSystemPromptOptions {
   modelProvider: string
+  modelProviderLabel?: string
   modelId: string
+  modelLabel?: string
   channel?: string
   skills?: SkillPromptEntry[]
 }
@@ -85,7 +87,7 @@ function buildSkillsPromptSection(options: BuildSystemPromptOptions): string {
  * @returns System context string
  */
 function buildRuntimeContext(options: BuildSystemPromptOptions): string {
-  const { modelProvider, modelId, channel } = options
+  const { modelProvider, modelProviderLabel, modelId, modelLabel, channel } = options
   const platform = process.platform
   const osName =
     platform === "darwin"
@@ -114,6 +116,8 @@ function buildRuntimeContext(options: BuildSystemPromptOptions): string {
   const offsetSign = offsetMinutes >= 0 ? "+" : "-"
   const utcOffset = `UTC${offsetSign}${offsetHours}${offsetMins > 0 ? `:${offsetMins.toString().padStart(2, "0")}` : ""}`
   const normalizedChannel = channel?.trim()
+  const displayProvider = modelProviderLabel?.trim() || modelProvider
+  const displayModel = modelLabel?.trim() || modelId
 
   const runtimeContextLines = [
     "Runtime context:",
@@ -121,7 +125,7 @@ function buildRuntimeContext(options: BuildSystemPromptOptions): string {
     `- platform: ${platform}`,
     `- current_date: ${localDate}`,
     `- time_zone: ${tz} (${utcOffset})`,
-    `- model: ${modelProvider}/${modelId}`,
+    `- model: ${displayProvider}/${displayModel}`,
     normalizedChannel ? `- channel: ${normalizedChannel}` : null
   ]
 

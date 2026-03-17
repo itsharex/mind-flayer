@@ -22,7 +22,15 @@ export async function handleChat(
 
     // Extract request parameters
     const provider = (c.req.header("x-model-provider") || body.provider || "minimax").toLowerCase()
+    const modelProviderLabelHeader = c.req.header("x-model-provider-label")
+    const modelProviderLabelBody =
+      typeof body.modelProviderLabel === "string" ? body.modelProviderLabel : undefined
+    const modelProviderLabel =
+      (modelProviderLabelHeader || modelProviderLabelBody)?.trim() || undefined
     const modelId = c.req.header("x-model-id") || body.model
+    const modelLabelHeader = c.req.header("x-model-label")
+    const modelLabelBody = typeof body.modelLabel === "string" ? body.modelLabel : undefined
+    const modelLabel = (modelLabelHeader || modelLabelBody)?.trim() || undefined
     const useWebSearch = c.req.header("x-use-web-search") === "true" || body.useWebSearch
     const webSearchMode = (c.req.header("x-web-search-mode") as WebSearchMode) || "auto"
     const reasoningEnabled =
@@ -52,7 +60,9 @@ export async function handleChat(
 
     console.log("[sidecar] /api/chat", {
       provider,
+      modelProviderLabel,
       modelId,
+      modelLabel,
       useWebSearch,
       webSearchMode,
       reasoningEnabled,
@@ -72,7 +82,6 @@ export async function handleChat(
       webSearchMode,
       messages
     })
-    console.log("[sidecar] Tool choice:", toolChoice)
 
     // Combine request abort signal with global abort controller
     const abortSignal = AbortSignal.any([c.req.raw.signal, globalAbortController.signal])
@@ -81,7 +90,9 @@ export async function handleChat(
     return await createStreamResponse({
       model,
       modelProvider: provider,
+      modelProviderLabel,
       modelId,
+      modelLabel,
       messages,
       tools: requestTools,
       toolChoice,

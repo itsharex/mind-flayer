@@ -28,6 +28,25 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("- channel: telegram")
   })
 
+  it("uses the model label in runtime context when provided", () => {
+    const prompt = buildSystemPrompt({
+      ...baseOptions,
+      modelLabel: "MiniMax-M2.5"
+    })
+
+    expect(prompt).toContain("- model: minimax/MiniMax-M2.5")
+  })
+
+  it("uses the provider label in runtime context when provided", () => {
+    const prompt = buildSystemPrompt({
+      ...baseOptions,
+      modelProviderLabel: "MiniMax",
+      modelLabel: "MiniMax-M2.5"
+    })
+
+    expect(prompt).toContain("- model: MiniMax/MiniMax-M2.5")
+  })
+
   it("omits channel runtime context when channel is empty", () => {
     const prompt = buildSystemPrompt({
       ...baseOptions,

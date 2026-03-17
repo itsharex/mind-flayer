@@ -12,7 +12,12 @@ describe("channel runtime config routes", () => {
     }
 
     channelRuntimeConfigService.update({
-      selectedModel: { provider: "minimax", modelId: "model-a" },
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
       channels: {
         telegram: {
           enabled: true,
@@ -32,7 +37,12 @@ describe("channel runtime config routes", () => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        selectedModel: { provider: "minimax", modelId: "model-b" },
+        selectedModel: {
+          provider: "minimax",
+          providerLabel: "MiniMax",
+          modelId: "model-b",
+          modelLabel: "MiniMax-M2.1"
+        },
         channels: {
           telegram: {
             enabled: false,
@@ -44,7 +54,12 @@ describe("channel runtime config routes", () => {
 
     expect(res.status).toBe(200)
     expect(channelRuntimeConfigService.getConfig()).toMatchObject({
-      selectedModel: { provider: "minimax", modelId: "model-b" },
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-b",
+        modelLabel: "MiniMax-M2.1"
+      },
       channels: {
         telegram: {
           enabled: false,

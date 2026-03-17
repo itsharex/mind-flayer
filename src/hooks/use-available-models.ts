@@ -29,6 +29,7 @@ export function useAvailableModels() {
           for (const model of provider.models) {
             models.push({
               provider: provider.id,
+              providerLabel: provider.name,
               label: model.label,
               api_id: model.api_id,
               contextWindow: model.contextWindow,

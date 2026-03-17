@@ -14,7 +14,11 @@ import {
 import { ProviderLogo } from "@/components/ui/provider-logo"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { MODEL_PROVIDERS, UPCOMING_PROVIDERS } from "@/lib/provider-constants"
+import {
+  MODEL_PROVIDERS,
+  sortProvidersByAvailabilityAndName,
+  UPCOMING_PROVIDERS
+} from "@/lib/provider-constants"
 import { cn } from "@/lib/utils"
 import type { ProviderFormData } from "@/types/settings"
 
@@ -54,12 +58,16 @@ export function ProviderSection({
 }: ProviderSectionProps) {
   const { t } = useTranslation("settings")
   const [showPassword, setShowPassword] = useState(false)
+  const sortedProviders = [
+    ...sortProvidersByAvailabilityAndName(MODEL_PROVIDERS, enabledProviders),
+    ...sortProvidersByAvailabilityAndName(UPCOMING_PROVIDERS, enabledProviders)
+  ]
 
   return (
     <div className="flex flex-col bg-setting-background-highlight space-y-6 py-6 px-4 rounded-md">
       {/* Horizontal Provider Buttons */}
       <div className="flex flex-wrap gap-2">
-        {[...MODEL_PROVIDERS, ...UPCOMING_PROVIDERS].map(provider => {
+        {sortedProviders.map(provider => {
           const providerLocked = provider.disabled ?? false
           const providerEnabled = !providerLocked && (enabledProviders[provider.id] ?? false)
           const isActive = activeProvider === provider.id
@@ -96,7 +104,7 @@ export function ProviderSection({
       <Separator />
 
       {/* Provider Form */}
-      {[...MODEL_PROVIDERS, ...UPCOMING_PROVIDERS].map(provider => {
+      {sortedProviders.map(provider => {
         if (provider.id !== activeProvider) return null
         const data = formData[provider.id]
         const providerLocked = provider.disabled ?? false
