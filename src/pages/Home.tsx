@@ -500,26 +500,41 @@ export default function Page() {
 
       {/* Main content area */}
       <SidebarInset className="overflow-hidden">
-        {activePane === "telegram-debug" ? (
-          <ChannelTelegramChat />
-        ) : activePane === "skills" ? (
-          <SkillsPane disabledSkillIds={disabledSkills} setDisabledSkillIds={setDisabledSkills} />
-        ) : (
-          <AppChat
-            activeChatId={activeChatId}
-            chats={chats}
-            newChatToken={newChatToken}
-            createChat={createChat}
-            loadMessages={loadMessages}
-            saveChatAllMessages={saveChatAllMessages}
-            updateChatTitle={updateChatTitle}
-            draftStore={draftStoreRef.current}
-            isDesktopChatPaneActive={isDesktopChatPaneActive}
-            onRequestActivateChat={handleRequestActivateChat}
-            onChatUnread={handleChatUnread}
-            onChatReplyingChange={handleChatReplyingChange}
-          />
-        )}
+        <div className="relative h-full">
+          {/* Keep AppChat mounted so background reply state stays in sync across pane switches. */}
+          <div
+            aria-hidden={activePane !== "desktop-chat"}
+            className={cn("absolute inset-0", activePane !== "desktop-chat" && "hidden")}
+          >
+            <AppChat
+              activeChatId={activeChatId}
+              chats={chats}
+              newChatToken={newChatToken}
+              createChat={createChat}
+              loadMessages={loadMessages}
+              saveChatAllMessages={saveChatAllMessages}
+              updateChatTitle={updateChatTitle}
+              draftStore={draftStoreRef.current}
+              isDesktopChatPaneActive={isDesktopChatPaneActive}
+              onRequestActivateChat={handleRequestActivateChat}
+              onChatUnread={handleChatUnread}
+              onChatReplyingChange={handleChatReplyingChange}
+            />
+          </div>
+
+          {activePane === "telegram-debug" ? (
+            <div className="absolute inset-0">
+              <ChannelTelegramChat />
+            </div>
+          ) : activePane === "skills" ? (
+            <div className="absolute inset-0">
+              <SkillsPane
+                disabledSkillIds={disabledSkills}
+                setDisabledSkillIds={setDisabledSkills}
+              />
+            </div>
+          ) : null}
+        </div>
       </SidebarInset>
 
       <Dialog open={Boolean(currentWhitelistRequest)}>
