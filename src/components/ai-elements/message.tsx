@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { ButtonGroup, ButtonGroupText } from "@/components/ui/button-group"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { normalizeLocalImageMarkdown } from "@/lib/local-image-url"
 import { cn } from "@/lib/utils"
 import "katex/dist/katex.min.css"
 
@@ -287,11 +288,16 @@ export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
 export const MessageResponse = memo(
   ({
     className,
+    children,
     components: componentsProp,
     localImageProxyOrigin,
     ...props
   }: MessageResponseProps) => {
     const localImageCacheBustKey = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    const normalizedChildren =
+      typeof children === "string" && localImageProxyOrigin
+        ? normalizeLocalImageMarkdown(children)
+        : children
 
     const components = useMemo(
       () =>
@@ -330,7 +336,9 @@ export const MessageResponse = memo(
         remarkPlugins={[...Object.values(defaultRemarkPlugins), remarkPlugins]}
         rehypePlugins={streamdownRehypePluginsWithLocalImageSrc}
         {...props}
-      />
+      >
+        {normalizedChildren}
+      </Streamdown>
     )
   },
   (prevProps, nextProps) =>

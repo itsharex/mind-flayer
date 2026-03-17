@@ -9,6 +9,10 @@ type ResolveLocalImageUrlOptions = {
   cacheBustKey?: string | number | null
 }
 
+function encodeWhitespace(value: string): string {
+  return value.replace(/\s/g, whitespace => encodeURIComponent(whitespace))
+}
+
 function stripSearchAndHash(value: string): string {
   return value.split("#", 1)[0]?.split("?", 1)[0] ?? value
 }
@@ -49,6 +53,58 @@ function normalizeLocalPathCandidate(source: string): string | null {
   return null
 }
 
+function findClosingMarker(
+  value: string,
+  startIndex: number,
+  openMarker: string,
+  closeMarker: string
+): number {
+  let depth = 1
+
+  for (let index = startIndex + 1; index < value.length; index += 1) {
+    const character = value[index]
+
+    if (character === "\\") {
+      index += 1
+      continue
+    }
+
+    if (character === openMarker) {
+      depth += 1
+      continue
+    }
+
+    if (character === closeMarker) {
+      depth -= 1
+
+      if (depth === 0) {
+        return index
+      }
+    }
+  }
+
+  return -1
+}
+
+function normalizeMarkdownLocalImageDestination(destination: string): string | null {
+  const leadingWhitespace = destination.match(/^\s*/)?.[0] ?? ""
+  const trailingWhitespace = destination.match(/\s*$/)?.[0] ?? ""
+  const coreDestination = destination.slice(
+    leadingWhitespace.length,
+    destination.length - trailingWhitespace.length
+  )
+
+  if (!coreDestination || !/\s/.test(coreDestination)) {
+    return null
+  }
+
+  if (!isLocalImagePath(coreDestination) || !hasSupportedLocalImageExtension(coreDestination)) {
+    return null
+  }
+
+  return `${leadingWhitespace}${encodeWhitespace(coreDestination)}${trailingWhitespace}`
+}
+
 export function hasSupportedLocalImageExtension(source: string): boolean {
   const normalizedPath = normalizeLocalPathCandidate(source)
   if (!normalizedPath) {
@@ -66,6 +122,47 @@ export function hasSupportedLocalImageExtension(source: string): boolean {
 
 export function isLocalImagePath(source: string): boolean {
   return normalizeLocalPathCandidate(source) !== null
+}
+
+export function normalizeLocalImageMarkdown(markdown: string): string {
+  let result = ""
+  let cursor = 0
+
+  while (cursor < markdown.length) {
+    const imageStart = markdown.indexOf("![", cursor)
+    if (imageStart === -1) {
+      result += markdown.slice(cursor)
+      break
+    }
+
+    result += markdown.slice(cursor, imageStart)
+
+    const altTextStart = imageStart + 1
+    const altTextEnd = findClosingMarker(markdown, altTextStart, "[", "]")
+    if (altTextEnd === -1 || markdown[altTextEnd + 1] !== "(") {
+      result += markdown.slice(imageStart, imageStart + 2)
+      cursor = imageStart + 2
+      continue
+    }
+
+    const destinationStart = altTextEnd + 2
+    const destinationEnd = findClosingMarker(markdown, altTextEnd + 1, "(", ")")
+    if (destinationEnd === -1) {
+      result += markdown.slice(imageStart)
+      break
+    }
+
+    const rawDestination = markdown.slice(destinationStart, destinationEnd)
+    const normalizedDestination =
+      normalizeMarkdownLocalImageDestination(rawDestination) ?? rawDestination
+
+    result += markdown.slice(imageStart, destinationStart)
+    result += normalizedDestination
+    result += ")"
+    cursor = destinationEnd + 1
+  }
+
+  return result
 }
 
 function trimTrailingSlashes(origin: string): string {

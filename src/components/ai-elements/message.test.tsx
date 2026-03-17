@@ -78,6 +78,36 @@ describe("MessageResponse local image rendering", () => {
     expect(parsedUrl.searchParams.get("_ts")).toBeTruthy()
   })
 
+  it("renders file URL image with whitespace in the local path", async () => {
+    const fileUrlPath =
+      "file:///Users/didi/Library/Application Support/Mind Flayer/workspaces/shot one.png"
+
+    await act(async () => {
+      root.render(
+        <MessageResponse localImageProxyOrigin="http://localhost:21420">
+          {`![local](${fileUrlPath})`}
+        </MessageResponse>
+      )
+    })
+
+    const image = container.querySelector("img")
+    expect(image).not.toBeNull()
+
+    const source = image?.getAttribute("src")
+    expect(source).toBeTruthy()
+
+    const parsedUrl = new URL(source as string)
+    expect(parsedUrl.origin).toBe("http://localhost:21420")
+    expect(parsedUrl.pathname).toBe("/api/local-image")
+
+    const proxiedFileUrl = parsedUrl.searchParams.get("path")
+    expect(proxiedFileUrl).toBeTruthy()
+    expect(decodeURIComponent(new URL(proxiedFileUrl as string).pathname)).toBe(
+      "/Users/didi/Library/Application Support/Mind Flayer/workspaces/shot one.png"
+    )
+    expect(parsedUrl.searchParams.get("_ts")).toBeTruthy()
+  })
+
   it("falls back to text link when image loading fails", async () => {
     const localPath = "/Users/didi/Desktop/missing.png"
 
