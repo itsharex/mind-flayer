@@ -102,12 +102,18 @@ export function NavChats({
               >
                 {isReplying ? (
                   <>
-                    <Loader2Icon aria-hidden className="size-3 animate-spin text-brand-green" />
+                    <Loader2Icon
+                      aria-hidden
+                      className="size-3 animate-spin text-status-notification"
+                    />
                     <span className="sr-only">{t("nav.replying")}</span>
                   </>
                 ) : isUnread ? (
                   <>
-                    <CircleIcon aria-hidden className="size-1.5 fill-current text-brand-green" />
+                    <CircleIcon
+                      aria-hidden
+                      className="size-1.5 fill-current text-status-notification"
+                    />
                     <span className="sr-only">{t("nav.unread")}</span>
                   </>
                 ) : (

@@ -39,6 +39,8 @@ export const APPEARANCE_THEME_CSS_VAR_NAMES = [
   "--chat-input-placeholder-color",
   "--brand-green-color",
   "--brand-green-color-light",
+  "--status-active-color",
+  "--status-notification-color",
   "--setting-background",
   "--setting-sidebar",
   "--setting-background-highlight"
@@ -83,7 +85,20 @@ type AppearanceThemePalette = {
 
 type AppearanceThemeDefinition = Record<AppearanceThemeMode, AppearanceThemeTokens>
 
-function defineThemeTokens(palette: AppearanceThemePalette): AppearanceThemeTokens {
+const STATUS_ACTIVE_COLORS: Record<AppearanceThemeMode, string> = {
+  light: "oklch(0.723 0.219 149.579)",
+  dark: "oklch(0.792 0.209 151.711)"
+}
+
+const STATUS_NOTIFICATION_COLORS: Record<AppearanceThemeMode, string> = {
+  light: "oklch(0.623 0.214 259.815)",
+  dark: "oklch(0.707 0.165 254.624)"
+}
+
+function defineThemeTokens(
+  mode: AppearanceThemeMode,
+  palette: AppearanceThemePalette
+): AppearanceThemeTokens {
   return {
     "--background": palette.background,
     "--background-transparent": "oklch(0 0 0 / 0%)",
@@ -121,6 +136,8 @@ function defineThemeTokens(palette: AppearanceThemePalette): AppearanceThemeToke
     "--chat-input-placeholder-color": palette.chatInputPlaceholder,
     "--brand-green-color": palette.brand,
     "--brand-green-color-light": palette.brandSoft,
+    "--status-active-color": STATUS_ACTIVE_COLORS[mode],
+    "--status-notification-color": STATUS_NOTIFICATION_COLORS[mode],
     "--setting-background": palette.settingBackground,
     "--setting-sidebar": palette.settingSidebar,
     "--setting-background-highlight": palette.settingHighlight
@@ -129,7 +146,7 @@ function defineThemeTokens(palette: AppearanceThemePalette): AppearanceThemeToke
 
 export const APPEARANCE_THEME_PRESETS: Record<AppearanceThemeId, AppearanceThemeDefinition> = {
   forest: {
-    light: defineThemeTokens({
+    light: defineThemeTokens("light", {
       background: "oklch(0.986 0.006 152)",
       foreground: "oklch(0.216 0.014 152)",
       card: "oklch(0.995 0.004 152)",
@@ -161,7 +178,7 @@ export const APPEARANCE_THEME_PRESETS: Record<AppearanceThemeId, AppearanceTheme
       settingSidebar: "oklch(0.949 0.009 153)",
       settingHighlight: "oklch(0.994 0.004 152)"
     }),
-    dark: defineThemeTokens({
+    dark: defineThemeTokens("dark", {
       background: "oklch(0.236 0.012 152)",
       foreground: "oklch(0.97 0.004 152)",
       card: "oklch(0.264 0.01 152)",
@@ -195,7 +212,7 @@ export const APPEARANCE_THEME_PRESETS: Record<AppearanceThemeId, AppearanceTheme
     })
   },
   sand: {
-    light: defineThemeTokens({
+    light: defineThemeTokens("light", {
       background: "oklch(0.985 0.01 78)",
       foreground: "oklch(0.23 0.012 62)",
       card: "oklch(0.994 0.006 78)",
@@ -227,7 +244,7 @@ export const APPEARANCE_THEME_PRESETS: Record<AppearanceThemeId, AppearanceTheme
       settingSidebar: "oklch(0.949 0.012 72)",
       settingHighlight: "oklch(0.993 0.006 78)"
     }),
-    dark: defineThemeTokens({
+    dark: defineThemeTokens("dark", {
       background: "oklch(0.236 0.01 62)",
       foreground: "oklch(0.97 0.004 78)",
       card: "oklch(0.266 0.01 62)",
@@ -261,7 +278,7 @@ export const APPEARANCE_THEME_PRESETS: Record<AppearanceThemeId, AppearanceTheme
     })
   },
   workbench: {
-    light: defineThemeTokens({
+    light: defineThemeTokens("light", {
       background: "oklch(0.984 0.006 250)",
       foreground: "oklch(0.228 0.018 255)",
       card: "oklch(0.994 0.004 250)",
@@ -293,7 +310,7 @@ export const APPEARANCE_THEME_PRESETS: Record<AppearanceThemeId, AppearanceTheme
       settingSidebar: "oklch(0.948 0.008 250)",
       settingHighlight: "oklch(0.993 0.004 250)"
     }),
-    dark: defineThemeTokens({
+    dark: defineThemeTokens("dark", {
       background: "oklch(0.224 0.015 255)",
       foreground: "oklch(0.972 0.004 250)",
       card: "oklch(0.254 0.014 255)",
@@ -327,7 +344,7 @@ export const APPEARANCE_THEME_PRESETS: Record<AppearanceThemeId, AppearanceTheme
     })
   },
   graphite: {
-    light: defineThemeTokens({
+    light: defineThemeTokens("light", {
       background: "oklch(1 0 0)",
       foreground: "oklch(0.145 0 0)",
       card: "oklch(1 0 0)",
@@ -359,7 +376,7 @@ export const APPEARANCE_THEME_PRESETS: Record<AppearanceThemeId, AppearanceTheme
       settingSidebar: "oklch(0.94611 0 271.152)",
       settingHighlight: "oklch(1 0 0)"
     }),
-    dark: defineThemeTokens({
+    dark: defineThemeTokens("dark", {
       background: "oklch(0.23 0 271.152)",
       foreground: "oklch(0.985 0 0)",
       card: "oklch(0.205 0 0)",

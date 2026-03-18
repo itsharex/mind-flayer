@@ -1,4 +1,4 @@
-import type { UIMessage } from "ai"
+import type { LanguageModelUsage, UIMessage } from "ai"
 import { Hono } from "hono"
 import { describe, expect, it, vi } from "vitest"
 import {
@@ -13,24 +13,41 @@ const createTextMessage = (id: string, role: "user" | "assistant", text: string)
     parts: [{ type: "text", text }]
   }) as UIMessage
 
+const usage: LanguageModelUsage = {
+  inputTokens: 100,
+  outputTokens: 20,
+  totalTokens: 120
+} as LanguageModelUsage
+
 describe("Telegram channel session routes", () => {
   it("returns sessions from TelegramBotService", async () => {
     const app = new Hono()
     const telegramBotService = {
       listSessions: vi.fn(() => [
         {
-          sessionKey: "telegram:thread-2",
+          sessionKey: "telegram:thread-2:session-b",
+          sessionId: "session-b",
           chatId: "thread-2",
+          isActive: true,
+          startedAt: 150,
           updatedAt: 200,
           messageCount: 3,
+          firstMessagePreview: "first",
           lastMessageRole: "assistant",
-          lastMessagePreview: "latest"
+          lastMessagePreview: "latest",
+          latestAssistantUsage: usage,
+          latestModelProvider: "openai",
+          latestModelId: "gpt-5.4"
         },
         {
-          sessionKey: "telegram:thread-1",
+          sessionKey: "telegram:thread-1:session-a",
+          sessionId: "session-a",
           chatId: "thread-1",
+          isActive: false,
+          startedAt: 90,
           updatedAt: 100,
           messageCount: 2,
+          firstMessagePreview: "hello",
           lastMessageRole: "user",
           lastMessagePreview: "hello"
         }
@@ -46,13 +63,26 @@ describe("Telegram channel session routes", () => {
 
     const payload = (await res.json()) as {
       success: boolean
-      sessions: Array<{ sessionKey: string; updatedAt: number }>
+      sessions: Array<{
+        sessionKey: string
+        sessionId: string
+        isActive: boolean
+        startedAt: number
+        updatedAt: number
+        firstMessagePreview: string
+        latestAssistantUsage?: LanguageModelUsage
+      }>
     }
 
     expect(payload.success).toBe(true)
     expect(payload.sessions).toHaveLength(2)
-    expect(payload.sessions[0]?.sessionKey).toBe("telegram:thread-2")
+    expect(payload.sessions[0]?.sessionKey).toBe("telegram:thread-2:session-b")
+    expect(payload.sessions[0]?.sessionId).toBe("session-b")
+    expect(payload.sessions[0]?.isActive).toBe(true)
+    expect(payload.sessions[0]?.startedAt).toBe(150)
     expect(payload.sessions[0]?.updatedAt).toBe(200)
+    expect(payload.sessions[0]?.firstMessagePreview).toBe("first")
+    expect(payload.sessions[0]?.latestAssistantUsage).toEqual(usage)
   })
 
   it("returns 400 when sessionKey query is missing", async () => {

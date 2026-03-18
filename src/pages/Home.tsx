@@ -18,7 +18,7 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/s
 import { useAvailableModels } from "@/hooks/use-available-models"
 import { useChatStorage } from "@/hooks/use-chat-storage"
 import { useLocalShortcut } from "@/hooks/use-local-shortcut"
-import { useSetting } from "@/hooks/use-settings-store"
+import { useSettingWithLoaded } from "@/hooks/use-settings-store"
 import {
   decideTelegramWhitelistRequest,
   getTelegramWhitelistRequests,
@@ -135,10 +135,14 @@ export default function Page() {
   const [activePane, setActivePane] = useState<ActivePane>("desktop-chat")
   const [unreadChatIds, setUnreadChatIds] = useState<Set<ChatId>>(new Set())
   const [replyingChatIds, setReplyingChatIds] = useState<Set<ChatId>>(new Set())
-  const [selectedModelApiId, setSelectedModelApiId] = useSetting("selectedModelApiId")
-  const [enabledChannels, setEnabledChannels] = useSetting("enabledChannels")
-  const [telegramAllowedUserIds, setTelegramAllowedUserIds] = useSetting("telegramAllowedUserIds")
-  const [disabledSkills, setDisabledSkills] = useSetting("disabledSkills")
+  const [selectedModelApiId, setSelectedModelApiId, isSelectedModelApiIdLoaded] =
+    useSettingWithLoaded("selectedModelApiId")
+  const [enabledChannels, setEnabledChannels, areEnabledChannelsLoaded] =
+    useSettingWithLoaded("enabledChannels")
+  const [telegramAllowedUserIds, setTelegramAllowedUserIds, areTelegramAllowedUserIdsLoaded] =
+    useSettingWithLoaded("telegramAllowedUserIds")
+  const [disabledSkills, setDisabledSkills, areDisabledSkillsLoaded] =
+    useSettingWithLoaded("disabledSkills")
   const [whitelistRequests, setWhitelistRequests] = useState<TelegramWhitelistRequest[]>([])
   const [isDecidingWhitelistRequest, setIsDecidingWhitelistRequest] = useState(false)
   const sidebarActiveChatId = activePane === "desktop-chat" ? activeChatId : null
@@ -156,6 +160,11 @@ export default function Page() {
   const selectedModelProviderLabel = selectedModel?.providerLabel ?? null
   const selectedModelId = selectedModel?.api_id ?? null
   const selectedModelLabel = selectedModel?.label ?? null
+  const areRuntimeSettingsLoaded =
+    isSelectedModelApiIdLoaded &&
+    areEnabledChannelsLoaded &&
+    areTelegramAllowedUserIdsLoaded &&
+    areDisabledSkillsLoaded
 
   useEffect(() => {
     activeChatIdRef.current = activeChatId
@@ -186,6 +195,10 @@ export default function Page() {
   )
 
   useEffect(() => {
+    if (!areRuntimeSettingsLoaded) {
+      return
+    }
+
     let cancelled = false
     const syncId = latestRuntimeConfigSyncIdRef.current + 1
     latestRuntimeConfigSyncIdRef.current = syncId
@@ -226,10 +239,6 @@ export default function Page() {
           !runtimeConfigSettingsEqual(lastAppliedRuntimeConfig, settingsSnapshot)
 
         if (!lastAppliedRuntimeConfig) {
-          toast.error(t("toast.error"), {
-            id: "runtime-config-sync-error",
-            description: t("runtimeConfig.syncError")
-          })
           return
         }
 
@@ -237,11 +246,7 @@ export default function Page() {
           return
         }
 
-        toast.error(t("toast.error"), {
-          id: "runtime-config-sync-error",
-          description: t("runtimeConfig.syncError")
-        })
-
+        console.warn("[Home] Restoring last applied runtime config snapshot after sync failure.")
         await restoreRuntimeConfigSnapshot(lastAppliedRuntimeConfig)
       })
 
@@ -249,6 +254,7 @@ export default function Page() {
       cancelled = true
     }
   }, [
+    areRuntimeSettingsLoaded,
     disabledSkills,
     enabledChannels,
     restoreRuntimeConfigSnapshot,
@@ -257,7 +263,6 @@ export default function Page() {
     selectedModelLabel,
     selectedModelProvider,
     selectedModelProviderLabel,
-    t,
     telegramAllowedUserIds
   ])
 
