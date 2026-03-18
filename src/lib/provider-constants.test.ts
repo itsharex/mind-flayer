@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import {
   ALL_PROVIDERS,
   DEFAULT_FORM_DATA,
+  findModelContextWindow,
   MODEL_PROVIDERS,
   sortProvidersByAvailabilityAndName,
   UPCOMING_PROVIDERS
@@ -160,5 +161,16 @@ describe("sortProvidersByAvailabilityAndName", () => {
       "anthropic",
       "gemini"
     ])
+  })
+})
+
+describe("findModelContextWindow", () => {
+  it("returns the configured context window for a known model", () => {
+    expect(findModelContextWindow("openai", "gpt-5.4")).toBe(1_050_000)
+  })
+
+  it("returns undefined for unknown providers or models", () => {
+    expect(findModelContextWindow("missing", "gpt-5.4")).toBeUndefined()
+    expect(findModelContextWindow("openai", "missing")).toBeUndefined()
   })
 })

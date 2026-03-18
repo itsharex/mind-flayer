@@ -1,5 +1,5 @@
 import { randomInt, randomUUID } from "node:crypto"
-import type { LanguageModel } from "ai"
+import type { LanguageModel, LanguageModelUsage } from "ai"
 import { stepCountIs, streamText, type UIMessage } from "ai"
 import { discoverSkillsSafely, filterDisabledSkills } from "../skills/catalog"
 import { processMessages } from "../utils/message-processor"
@@ -27,6 +27,10 @@ const TELEGRAM_CHAT_ACTION_INTERVAL_MS = 3000
 const WHITELIST_JOIN_BUTTON_TEXT = "Join the Channel"
 const JOIN_REQUEST_CALLBACK_DATA = "mf_join_request_v1"
 const WHITELIST_DENY_COOLDOWN_MS = 10 * 60 * 1000
+const TELEGRAM_NEW_SESSION_COMMAND = /^\/new(?:@[A-Za-z0-9_]+)?$/u
+const TELEGRAM_NEW_SESSION_DESCRIPTION = "Start a new conversation"
+const TELEGRAM_NEW_SESSION_CONFIRMATION =
+  "Started a new session. Your next message will use a fresh context."
 
 interface TelegramApiResponse<T> {
   ok: boolean
@@ -135,13 +139,31 @@ type TelegramChatAction =
 
 type LogValue = string | number | boolean | null | undefined
 
+interface AssistantMessageMetadata {
+  createdAt?: number
+  totalUsage?: LanguageModelUsage
+  modelProvider?: string
+  modelProviderLabel?: string
+  modelId?: string
+  modelLabel?: string
+}
+
 export interface TelegramSessionSummary {
   sessionKey: string
+  sessionId: string
   chatId: string
+  isActive: boolean
+  startedAt: number
   updatedAt: number
   messageCount: number
+  firstMessagePreview: string
   lastMessageRole: UIMessage["role"] | null
   lastMessagePreview: string
+  latestAssistantUsage?: LanguageModelUsage
+  latestModelProvider?: string
+  latestModelProviderLabel?: string
+  latestModelId?: string
+  latestModelLabel?: string
 }
 
 export interface TelegramWhitelistRequest {
@@ -163,7 +185,9 @@ export class TelegramBotService {
   private runtimeSignature: string | null = null
   private refreshChain: Promise<void> = Promise.resolve()
   private sessionMessages = new Map<string, UIMessage[]>()
+  private sessionStartedAt = new Map<string, number>()
   private sessionUpdatedAt = new Map<string, number>()
+  private activeSessionKeyByChatId = new Map<string, string>()
   private whitelistRequests = new Map<string, TelegramWhitelistRequest>()
   private pendingWhitelistPreviewByUserId = new Map<string, string>()
   private deniedCooldownByUserId = new Map<string, number>()
@@ -196,17 +220,36 @@ export class TelegramBotService {
 
     for (const [sessionKey, messages] of this.sessionMessages.entries()) {
       const chatId = this.extractChatIdFromSessionKey(sessionKey)
+      const sessionId = this.extractSessionIdFromSessionKey(sessionKey)
+      const isActive = this.activeSessionKeyByChatId.get(chatId) === sessionKey
+      const startedAt =
+        this.sessionStartedAt.get(sessionKey) ?? this.sessionUpdatedAt.get(sessionKey) ?? 0
       const updatedAt = this.sessionUpdatedAt.get(sessionKey) ?? 0
+      const firstMessage = messages[0]
+      const firstMessageText = this.extractMessageText(firstMessage)
       const lastMessage = messages[messages.length - 1]
       const lastMessageText = this.extractMessageText(lastMessage)
+      const latestAssistantMessage = this.findLatestAssistantMessage(messages)
+      const latestAssistantMetadata = latestAssistantMessage?.metadata as
+        | AssistantMessageMetadata
+        | undefined
 
       summaries.push({
         sessionKey,
+        sessionId,
         chatId,
+        isActive,
+        startedAt,
         updatedAt,
         messageCount: messages.length,
+        firstMessagePreview: this.toTextPreview(firstMessageText),
         lastMessageRole: lastMessage?.role ?? null,
-        lastMessagePreview: this.toTextPreview(lastMessageText)
+        lastMessagePreview: this.toTextPreview(lastMessageText),
+        latestAssistantUsage: latestAssistantMetadata?.totalUsage,
+        latestModelProvider: latestAssistantMetadata?.modelProvider,
+        latestModelProviderLabel: latestAssistantMetadata?.modelProviderLabel,
+        latestModelId: latestAssistantMetadata?.modelId,
+        latestModelLabel: latestAssistantMetadata?.modelLabel
       })
     }
 
@@ -307,6 +350,13 @@ export class TelegramBotService {
     runtimeSignature: string
   ): Promise<void> {
     await this.deleteWebhook(botToken, apiBaseUrl)
+    try {
+      await this.setMyCommands()
+    } catch (error) {
+      this.logInfo("Failed to sync Telegram commands", {
+        reason: error instanceof Error ? error.message : String(error)
+      })
+    }
 
     const pollAbortController = new AbortController()
     this.pollingAbortController = pollAbortController
@@ -504,9 +554,8 @@ export class TelegramBotService {
       return
     }
 
-    const incomingText = this.buildIncomingMessageText(message)
-
     if (!this.isAllowedPrivateUser(userId)) {
+      const incomingText = this.buildIncomingMessageText(message)
       const incomingPreview = this.toTextPreview(incomingText)
       if (incomingPreview) {
         this.pendingWhitelistPreviewByUserId.set(userId, incomingPreview)
@@ -515,9 +564,19 @@ export class TelegramBotService {
       return
     }
 
+    if (this.isNewSessionCommand(message.text)) {
+      this.createSession(chatId)
+      await this.sendTextMessage(chatId, TELEGRAM_NEW_SESSION_CONFIRMATION)
+      return
+    }
+
+    const incomingText = this.buildIncomingMessageText(message)
+
     if (!incomingText) {
       return
     }
+
+    const sessionKey = this.getOrCreateActiveSessionKey(chatId)
 
     const selectedModel = this.channelRuntimeConfigService.getSelectedModel()
     if (!selectedModel) {
@@ -548,7 +607,6 @@ export class TelegramBotService {
       return
     }
 
-    const sessionKey = `telegram:${chatId}`
     const history = this.sessionMessages.get(sessionKey) ?? []
     const messagesWithLatestInput = this.trimSessionMessages([
       ...history,
@@ -640,6 +698,8 @@ export class TelegramBotService {
         inputMessage: this.toTextPreview(incomingText)
       })
 
+      let assistantMetadata = this.createAssistantMessageMetadata(selectedModel)
+
       const result = streamText({
         model,
         system: buildSystemPrompt({
@@ -653,7 +713,13 @@ export class TelegramBotService {
         messages: modelMessages,
         tools,
         toolChoice,
-        stopWhen: Object.keys(tools).length > 0 ? stepCountIs(20) : stepCountIs(1)
+        stopWhen: Object.keys(tools).length > 0 ? stepCountIs(20) : stepCountIs(1),
+        onFinish: event => {
+          assistantMetadata = {
+            ...assistantMetadata,
+            ...(event.totalUsage ? { totalUsage: event.totalUsage } : {})
+          }
+        }
       })
 
       let assistantText = ""
@@ -700,7 +766,7 @@ export class TelegramBotService {
           sessionKey,
           this.trimSessionMessages([
             ...messagesWithLatestInput,
-            this.createTextMessage("assistant", fallbackText)
+            this.createTextMessage("assistant", fallbackText, assistantMetadata)
           ])
         )
         return
@@ -724,7 +790,7 @@ export class TelegramBotService {
         sessionKey,
         this.trimSessionMessages([
           ...messagesWithLatestInput,
-          this.createTextMessage("assistant", sanitizedText)
+          this.createTextMessage("assistant", sanitizedText, assistantMetadata)
         ])
       )
     } catch (error) {
@@ -1137,6 +1203,17 @@ export class TelegramBotService {
     return Array.isArray(payload.result) ? payload.result : []
   }
 
+  private async setMyCommands(): Promise<void> {
+    await this.callTelegramApi<true>("setMyCommands", {
+      commands: [
+        {
+          command: "new",
+          description: TELEGRAM_NEW_SESSION_DESCRIPTION
+        }
+      ]
+    })
+  }
+
   private async callTelegramApi<T = TelegramSentMessage>(
     method: string,
     payload: object | FormData,
@@ -1183,7 +1260,61 @@ export class TelegramBotService {
     return result.result
   }
 
-  private createTextMessage(role: "user" | "assistant", text: string): UIMessage {
+  private isNewSessionCommand(text: string | undefined): boolean {
+    const normalized = text?.trim()
+    return Boolean(normalized && TELEGRAM_NEW_SESSION_COMMAND.test(normalized))
+  }
+
+  private createSession(chatId: string): string {
+    const startedAt = Date.now()
+    const sessionId = randomUUID()
+    const sessionKey = this.buildSessionKey(chatId, sessionId)
+
+    this.activeSessionKeyByChatId.set(chatId, sessionKey)
+    this.sessionStartedAt.set(sessionKey, startedAt)
+    this.sessionMessages.set(sessionKey, [])
+    this.sessionUpdatedAt.set(sessionKey, startedAt)
+
+    return sessionKey
+  }
+
+  private getOrCreateActiveSessionKey(chatId: string): string {
+    const activeSessionKey = this.activeSessionKeyByChatId.get(chatId)
+    if (activeSessionKey && this.sessionMessages.has(activeSessionKey)) {
+      return activeSessionKey
+    }
+
+    return this.createSession(chatId)
+  }
+
+  private buildSessionKey(chatId: string, sessionId: string): string {
+    return `telegram:${chatId}:${sessionId}`
+  }
+
+  private createAssistantMessageMetadata(
+    selectedModel: {
+      provider: string
+      providerLabel?: string
+      modelId: string
+      modelLabel?: string
+    },
+    totalUsage?: LanguageModelUsage
+  ): AssistantMessageMetadata {
+    return {
+      createdAt: Date.now(),
+      ...(totalUsage ? { totalUsage } : {}),
+      modelProvider: selectedModel.provider,
+      ...(selectedModel.providerLabel ? { modelProviderLabel: selectedModel.providerLabel } : {}),
+      modelId: selectedModel.modelId,
+      ...(selectedModel.modelLabel ? { modelLabel: selectedModel.modelLabel } : {})
+    }
+  }
+
+  private createTextMessage(
+    role: "user" | "assistant",
+    text: string,
+    metadata?: AssistantMessageMetadata
+  ): UIMessage {
     return {
       id: randomUUID(),
       role,
@@ -1192,7 +1323,8 @@ export class TelegramBotService {
           type: "text",
           text
         }
-      ]
+      ],
+      ...(metadata ? { metadata } : {})
     } as UIMessage
   }
 
@@ -1215,11 +1347,44 @@ export class TelegramBotService {
 
   private setSessionMessages(sessionKey: string, messages: UIMessage[]): void {
     this.sessionMessages.set(sessionKey, messages)
-    this.sessionUpdatedAt.set(sessionKey, Date.now())
+    const updatedAt = Date.now()
+    this.sessionUpdatedAt.set(sessionKey, updatedAt)
+    if (!this.sessionStartedAt.has(sessionKey)) {
+      this.sessionStartedAt.set(sessionKey, updatedAt)
+    }
   }
 
   private extractChatIdFromSessionKey(sessionKey: string): string {
-    return sessionKey.startsWith("telegram:") ? sessionKey.slice("telegram:".length) : sessionKey
+    if (!sessionKey.startsWith("telegram:")) {
+      return sessionKey
+    }
+
+    const rawKey = sessionKey.slice("telegram:".length)
+    const separatorIndex = rawKey.indexOf(":")
+
+    return separatorIndex === -1 ? rawKey : rawKey.slice(0, separatorIndex)
+  }
+
+  private extractSessionIdFromSessionKey(sessionKey: string): string {
+    if (!sessionKey.startsWith("telegram:")) {
+      return sessionKey
+    }
+
+    const rawKey = sessionKey.slice("telegram:".length)
+    const separatorIndex = rawKey.indexOf(":")
+
+    return separatorIndex === -1 ? rawKey : rawKey.slice(separatorIndex + 1)
+  }
+
+  private findLatestAssistantMessage(messages: UIMessage[]): UIMessage | undefined {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index]
+      if (message?.role === "assistant") {
+        return message
+      }
+    }
+
+    return undefined
   }
 
   private extractMessageText(message: UIMessage | undefined): string {

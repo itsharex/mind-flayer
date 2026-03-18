@@ -277,6 +277,20 @@ export function findModelPricing(
   return model?.pricing ? { ...model.pricing } : undefined
 }
 
+export function findModelContextWindow(
+  providerId: string | null | undefined,
+  modelId: string | null | undefined
+): number | null | undefined {
+  if (!providerId || !modelId) {
+    return undefined
+  }
+
+  const provider = ALL_PROVIDERS.find(item => item.id === providerId)
+  const model = provider?.models?.find(item => item.api_id === modelId)
+
+  return model?.contextWindow
+}
+
 export const DEFAULT_FORM_DATA = ALL_PROVIDERS.reduce(
   (acc, provider) => {
     acc[provider.id] = { apiKey: "", baseUrl: "" }

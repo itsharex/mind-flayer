@@ -109,6 +109,10 @@ function parseMockCallJsonBody<T>(call: readonly unknown[] | undefined): T {
   return JSON.parse(body) as T
 }
 
+function findSessionSummaryByChatId(service: TelegramBotService, chatId: string) {
+  return service.listSessions().find(session => session.chatId === chatId)
+}
+
 describe("TelegramBotService", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -537,9 +541,13 @@ describe("TelegramBotService", () => {
 
     const sessions = service.listSessions()
     expect(sessions).toHaveLength(1)
-    expect(sessions[0]?.sessionKey).toBe("telegram:1001")
+    expect(sessions[0]?.sessionKey).toMatch(/^telegram:1001:/)
+    expect(sessions[0]?.sessionId).toBeTruthy()
+    expect(sessions[0]?.isActive).toBe(true)
+    expect(sessions[0]?.startedAt).toBeGreaterThan(0)
+    expect(sessions[0]?.firstMessagePreview).toBe("hello")
 
-    const storedMessages = service.getSessionMessages("telegram:1001")
+    const storedMessages = service.getSessionMessages(String(sessions[0]?.sessionKey))
     expect(storedMessages).toHaveLength(2)
     expect(storedMessages?.[1]?.role).toBe("assistant")
 
@@ -547,6 +555,346 @@ describe("TelegramBotService", () => {
     expect(fetchMock.mock.calls.some(call => String(call[0]).includes("/sendMessageDraft"))).toBe(
       true
     )
+  })
+
+  it("creates a fresh active session for /new without storing the command", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/sendMessageDraft")) {
+        return Promise.resolve(new Response("method not found", { status: 404 }))
+      }
+      return telegramApiSuccess({ message_id: 91 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    let streamCallCount = 0
+    streamTextMock.mockImplementation(() => {
+      streamCallCount += 1
+      return {
+        textStream: createTextStream(`Assistant reply ${streamCallCount}`)
+      }
+    })
+
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: ["4001"]
+        }
+      }
+    })
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService
+    )
+
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
+      }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 201,
+      chat: {
+        id: 4001,
+        type: "private"
+      },
+      from: {
+        id: 4001,
+        is_bot: false
+      },
+      text: "hello"
+    })
+
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
+      }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 202,
+      chat: {
+        id: 4001,
+        type: "private"
+      },
+      from: {
+        id: 4001,
+        is_bot: false
+      },
+      text: "/new"
+    })
+
+    const sessionsAfterNew = service.listSessions()
+    const freshSession = sessionsAfterNew.find(session => session.messageCount === 0)
+    const originalSession = sessionsAfterNew.find(session => session.messageCount === 2)
+    expect(streamTextMock).toHaveBeenCalledTimes(1)
+    expect(sessionsAfterNew).toHaveLength(2)
+    expect(freshSession?.chatId).toBe("4001")
+    expect(freshSession?.isActive).toBe(true)
+    expect(originalSession?.chatId).toBe("4001")
+    expect(originalSession?.isActive).toBe(false)
+    expect(originalSession?.firstMessagePreview).toBe("hello")
+    expect(
+      service
+        .getSessionMessages(String(freshSession?.sessionKey))
+        ?.map(message => message.parts.map(part => ("text" in part ? part.text : "")).join(""))
+    ).toEqual([])
+
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
+      }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 203,
+      chat: {
+        id: 4001,
+        type: "private"
+      },
+      from: {
+        id: 4001,
+        is_bot: false
+      },
+      text: "hello again"
+    })
+
+    const sessionsAfterSecondReply = service.listSessions()
+    const latestSession = sessionsAfterSecondReply.find(session =>
+      session.lastMessagePreview.includes("Assistant reply 2")
+    )
+    const firstSession = sessionsAfterSecondReply.find(session =>
+      session.lastMessagePreview.includes("Assistant reply 1")
+    )
+    expect(sessionsAfterSecondReply).toHaveLength(2)
+    expect(latestSession?.messageCount).toBe(2)
+    expect(latestSession?.isActive).toBe(true)
+    expect(latestSession?.firstMessagePreview).toBe("hello again")
+    expect(firstSession?.messageCount).toBe(2)
+    expect(firstSession?.isActive).toBe(false)
+    expect(firstSession?.firstMessagePreview).toBe("hello")
+
+    const firstSessionMessages = service.getSessionMessages(String(firstSession?.sessionKey))
+    const secondSessionMessages = service.getSessionMessages(String(latestSession?.sessionKey))
+
+    expect(firstSessionMessages?.[0]?.parts[0]).toMatchObject({ type: "text", text: "hello" })
+    expect(secondSessionMessages?.[0]?.parts[0]).toMatchObject({
+      type: "text",
+      text: "hello again"
+    })
+    expect(
+      firstSessionMessages?.some(message =>
+        message.parts.some(part => "text" in part && part.text.includes("/new"))
+      )
+    ).toBe(false)
+  })
+
+  it("stores assistant usage metadata on messages and session summaries", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/sendMessageDraft")) {
+        return Promise.resolve(new Response("method not found", { status: 404 }))
+      }
+      return telegramApiSuccess({ message_id: 111 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const usage = {
+      inputTokens: 120,
+      outputTokens: 30,
+      totalTokens: 150
+    }
+
+    streamTextMock.mockImplementation(
+      (options: { onFinish?: (event: { totalUsage: unknown }) => void }) => {
+        options.onFinish?.({ totalUsage: usage })
+        return {
+          textStream: createTextStream("Assistant reply")
+        }
+      }
+    )
+
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: ["5001"]
+        }
+      }
+    })
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService
+    )
+
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
+      }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 301,
+      chat: {
+        id: 5001,
+        type: "private"
+      },
+      from: {
+        id: 5001,
+        is_bot: false
+      },
+      text: "hello"
+    })
+
+    const session = findSessionSummaryByChatId(service, "5001")
+    expect(session).toMatchObject({
+      chatId: "5001",
+      isActive: true,
+      firstMessagePreview: "hello",
+      latestAssistantUsage: usage,
+      latestModelProvider: "minimax",
+      latestModelProviderLabel: "MiniMax",
+      latestModelId: "model-a",
+      latestModelLabel: "MiniMax-M2.5"
+    })
+
+    const storedMessages = service.getSessionMessages(String(session?.sessionKey))
+    expect(storedMessages?.[1]?.metadata).toMatchObject({
+      totalUsage: usage,
+      modelProvider: "minimax",
+      modelProviderLabel: "MiniMax",
+      modelId: "model-a",
+      modelLabel: "MiniMax-M2.5"
+    })
+    expect(
+      (storedMessages?.[1]?.metadata as { createdAt?: number } | undefined)?.createdAt
+    ).toBeGreaterThan(0)
+  })
+
+  it("syncs Telegram commands when the runtime starts", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/deleteWebhook")) {
+        return telegramApiSuccess(true)
+      }
+      if (url.includes("/setMyCommands")) {
+        return telegramApiSuccess(true)
+      }
+      if (url.includes("/getUpdates")) {
+        return telegramApiSuccess([])
+      }
+      return telegramApiSuccess(true)
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: ["6001"]
+        }
+      }
+    })
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService
+    )
+
+    await service.refresh()
+    await service.stop()
+
+    const setMyCommandsCall = fetchMock.mock.calls.find(call =>
+      String(call[0]).includes("/setMyCommands")
+    )
+    expect(setMyCommandsCall).toBeDefined()
+    expect(
+      parseMockCallJsonBody<{ commands: Array<{ command: string; description: string }> }>(
+        setMyCommandsCall as readonly unknown[] | undefined
+      )
+    ).toEqual({
+      commands: [
+        {
+          command: "new",
+          description: "Start a new conversation"
+        }
+      ]
+    })
   })
 
   it("uses safe skill discovery when handling Telegram messages", async () => {
@@ -1233,7 +1581,8 @@ describe("TelegramBotService", () => {
     )
     expect(fetchMock.mock.calls.some(call => String(call[0]).endsWith("/sendMessage"))).toBe(true)
 
-    const storedMessages = service.getSessionMessages("telegram:3003")
+    const session = findSessionSummaryByChatId(service, "3003")
+    const storedMessages = service.getSessionMessages(String(session?.sessionKey))
     expect(storedMessages).toHaveLength(2)
     expect(storedMessages?.[1]?.role).toBe("assistant")
   })

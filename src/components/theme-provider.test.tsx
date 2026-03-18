@@ -220,6 +220,12 @@ describe("ThemeProvider", () => {
     expect(root.style.getPropertyValue("--brand-green-color")).toBe(
       forestDark["--brand-green-color"]
     )
+    expect(root.style.getPropertyValue("--status-active-color")).toBe(
+      forestDark["--status-active-color"]
+    )
+    expect(root.style.getPropertyValue("--status-notification-color")).toBe(
+      forestDark["--status-notification-color"]
+    )
     expect(storeValues.get("theme")).toBe("dark")
     expect(getProbeText(container, "primary-theme")).toBe("dark")
 

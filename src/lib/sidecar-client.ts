@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core"
-import type { UIMessage } from "ai"
+import type { LanguageModelUsage, UIMessage } from "ai"
 
 const DEFAULT_WAIT_TIMEOUT_MS = 15_000
 
@@ -196,11 +196,20 @@ export async function testTelegramConnection(): Promise<TelegramConnectionTestRe
 
 export interface TelegramChannelSessionSummary {
   sessionKey: string
+  sessionId: string
   chatId: string
+  isActive: boolean
+  startedAt: number
   updatedAt: number
   messageCount: number
+  firstMessagePreview: string
   lastMessageRole: UIMessage["role"] | null
   lastMessagePreview: string
+  latestAssistantUsage?: LanguageModelUsage
+  latestModelProvider?: string
+  latestModelProviderLabel?: string
+  latestModelId?: string
+  latestModelLabel?: string
 }
 
 export interface TelegramChannelSessionsResult {

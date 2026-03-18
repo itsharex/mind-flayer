@@ -117,13 +117,11 @@ export async function setSetting<K extends keyof AppSettings>(
   }
 }
 
-/**
- * React hook to use a specific setting with persistence
- */
-export function useSetting<K extends keyof AppSettings>(
+function useSettingInternal<K extends keyof AppSettings>(
   key: K
-): [AppSettings[K], (value: AppSettings[K]) => Promise<void>] {
+): [AppSettings[K], (value: AppSettings[K]) => Promise<void>, boolean] {
   const [value, setValue] = useState<AppSettings[K]>(DEFAULT_SETTINGS[key])
+  const [isLoaded, setIsLoaded] = useState(false)
 
   // Load initial value from store
   useEffect(() => {
@@ -132,6 +130,7 @@ export function useSetting<K extends keyof AppSettings>(
     getSetting(key).then(storedValue => {
       if (mounted) {
         setValue(storedValue)
+        setIsLoaded(true)
       }
     })
 
@@ -168,10 +167,30 @@ export function useSetting<K extends keyof AppSettings>(
   // Update function that persists to store and updates state
   const updateValue = async (newValue: AppSettings[K]) => {
     setValue(newValue)
+    setIsLoaded(true)
     await setSetting(key, newValue)
   }
 
+  return [value, updateValue, isLoaded]
+}
+
+/**
+ * React hook to use a specific setting with persistence
+ */
+export function useSetting<K extends keyof AppSettings>(
+  key: K
+): [AppSettings[K], (value: AppSettings[K]) => Promise<void>] {
+  const [value, updateValue] = useSettingInternal(key)
   return [value, updateValue]
+}
+
+/**
+ * React hook to use a specific setting with persistence and an explicit loaded flag.
+ */
+export function useSettingWithLoaded<K extends keyof AppSettings>(
+  key: K
+): [AppSettings[K], (value: AppSettings[K]) => Promise<void>, boolean] {
+  return useSettingInternal(key)
 }
 
 /**
