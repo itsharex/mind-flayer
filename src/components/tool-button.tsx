@@ -193,7 +193,7 @@ const ToolButton = ({
               >
                 <div className="flex w-full items-center gap-2">
                   {ModeIcon && (
-                    <ModeIcon className="size-4 shrink-0 group-hover:text-brand-green transition-colors" />
+                    <ModeIcon className="size-4 shrink-0 group-hover:text-brand transition-colors" />
                   )}
                   <span className="flex items-center flex-1 text-left font-medium gap-1.5">
                     {mode.label}
@@ -202,7 +202,7 @@ const ToolButton = ({
                       <span
                         className={cn(
                           "inline-flex items-center px-1.5 py-0.5 text-[9px] font-normal",
-                          "rounded-md text-brand-green bg-brand-green-light"
+                          "rounded-md text-brand bg-brand-soft"
                         )}
                       >
                         {mode.badge}
@@ -211,7 +211,7 @@ const ToolButton = ({
                   </span>
 
                   <span className="ml-2 w-4 shrink-0">
-                    {isSelected && <CheckIcon className="size-4 text-brand-green" />}
+                    {isSelected && <CheckIcon className="size-4 text-brand" />}
                   </span>
                 </div>
               </DropdownMenuItem>

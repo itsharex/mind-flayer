@@ -11,7 +11,7 @@ import {
 import { cn } from "@/lib/utils"
 
 const RING_COLOR_BY_LEVEL: Record<UsageLevel, string> = {
-  green: "var(--color-brand-green)",
+  green: "var(--color-status-positive)",
   yellow: "#eab308",
   red: "var(--color-destructive)"
 }

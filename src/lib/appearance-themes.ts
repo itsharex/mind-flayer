@@ -37,9 +37,8 @@ export const APPEARANCE_THEME_CSS_VAR_NAMES = [
   "--chat-input-bg-color",
   "--chat-input-hover-bg-color",
   "--chat-input-placeholder-color",
-  "--brand-green-color",
-  "--brand-green-color-light",
-  "--status-active-color",
+  "--brand-color",
+  "--brand-soft-color",
   "--status-notification-color",
   "--setting-background",
   "--setting-sidebar",
@@ -85,11 +84,6 @@ type AppearanceThemePalette = {
 
 type AppearanceThemeDefinition = Record<AppearanceThemeMode, AppearanceThemeTokens>
 
-const STATUS_ACTIVE_COLORS: Record<AppearanceThemeMode, string> = {
-  light: "oklch(0.723 0.219 149.579)",
-  dark: "oklch(0.792 0.209 151.711)"
-}
-
 const STATUS_NOTIFICATION_COLORS: Record<AppearanceThemeMode, string> = {
   light: "oklch(0.623 0.214 259.815)",
   dark: "oklch(0.707 0.165 254.624)"
@@ -134,9 +128,8 @@ function defineThemeTokens(
     "--chat-input-bg-color": palette.chatInputBg,
     "--chat-input-hover-bg-color": palette.chatInputHoverBg,
     "--chat-input-placeholder-color": palette.chatInputPlaceholder,
-    "--brand-green-color": palette.brand,
-    "--brand-green-color-light": palette.brandSoft,
-    "--status-active-color": STATUS_ACTIVE_COLORS[mode],
+    "--brand-color": palette.brand,
+    "--brand-soft-color": palette.brandSoft,
     "--status-notification-color": STATUS_NOTIFICATION_COLORS[mode],
     "--setting-background": palette.settingBackground,
     "--setting-sidebar": palette.settingSidebar,
@@ -424,5 +417,5 @@ export function getAppearanceThemePreviewColors(
 ) {
   const tokens = getAppearanceThemeTokens(themeId, mode)
 
-  return [tokens["--brand-green-color"], tokens["--background"], tokens["--sidebar"]] as const
+  return [tokens["--brand-color"], tokens["--background"], tokens["--sidebar"]] as const
 }

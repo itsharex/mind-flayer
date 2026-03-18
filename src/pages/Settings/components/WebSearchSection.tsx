@@ -73,14 +73,14 @@ export function WebSearchSection({
                 "rounded-full gap-2 h-8",
                 isActive &&
                   cn(
-                    "border-brand-green-light bg-brand-green-light hover:bg-brand-green-light",
-                    "dark:border-brand-green-light/50 dark:bg-brand-green-light/50 dark:hover:bg-brand-green-light/50"
+                    "border-brand-soft bg-brand-soft hover:bg-brand-soft",
+                    "dark:border-brand-soft/50 dark:bg-brand-soft/50 dark:hover:bg-brand-soft/50"
                   )
               )}
             >
               <ProviderIcon className="size-4 shrink-0" />
               <span>{provider.name}</span>
-              {providerEnabled && <CircleIcon className="size-2 fill-current text-brand-green" />}
+              {providerEnabled && <CircleIcon className="size-2 fill-current text-brand" />}
               {!providerEnabled && <CircleIcon className="size-2" />}
             </Button>
           )

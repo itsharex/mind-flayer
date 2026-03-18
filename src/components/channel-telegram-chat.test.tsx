@@ -260,7 +260,7 @@ describe("ChannelTelegramChat", () => {
       container
         .querySelector('[data-session-status="active"] svg')
         ?.getAttribute("class")
-        ?.includes("text-status-active")
+        ?.includes("text-status-positive")
     ).toBe(true)
     expect(container.querySelectorAll('[data-session-status="active"]')).toHaveLength(2)
     expect(container.querySelectorAll('[data-session-status="archived"]')).toHaveLength(1)

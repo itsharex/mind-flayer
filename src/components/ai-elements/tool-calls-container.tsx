@@ -540,8 +540,8 @@ export type ToolCallsSummaryData = {
 }
 
 const TOOL_CALLS_SUMMARY_BADGE_STYLES = {
-  tools: "text-brand-green/90",
-  skills: "text-brand-green/90"
+  tools: "text-brand/90",
+  skills: "text-brand/90"
 } as const
 
 const getToolSummarySkillContext = (

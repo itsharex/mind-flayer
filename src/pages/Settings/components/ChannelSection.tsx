@@ -232,7 +232,7 @@ export function ChannelSection({
             className="w-18"
           >
             {saveStatus === "success" ? (
-              <CheckIcon className="size-4 text-brand-green" />
+              <CheckIcon className="size-4 text-brand" />
             ) : saveStatus === "submitting" ? (
               <Loader2Icon className="mr-2 size-4 animate-spin" />
             ) : (

@@ -84,8 +84,8 @@ export function ProviderSection({
                 "rounded-full gap-2 h-8",
                 isActive &&
                   cn(
-                    "border-brand-green-light bg-brand-green-light hover:bg-brand-green-light",
-                    "dark:border-brand-green-light/50 dark:bg-brand-green-light/50 dark:hover:bg-brand-green-light/50"
+                    "border-brand-soft bg-brand-soft hover:bg-brand-soft",
+                    "dark:border-brand-soft/50 dark:bg-brand-soft/50 dark:hover:bg-brand-soft/50"
                   )
               )}
             >
@@ -93,7 +93,7 @@ export function ProviderSection({
               <span className="px-0">{provider.name}</span>
               {providerLocked && <Lock className="size-3" />}
               {!providerLocked && providerEnabled && (
-                <CircleIcon className="size-2 fill-current text-brand-green" />
+                <CircleIcon className="size-2 fill-current text-brand" />
               )}
               {!providerLocked && !providerEnabled && <CircleIcon className="size-2" />}
             </Button>
@@ -232,7 +232,7 @@ export function ProviderSection({
                 className="w-18"
               >
                 {saveStatus === "success" ? (
-                  <CheckIcon className="size-4 text-brand-green" />
+                  <CheckIcon className="size-4 text-brand" />
                 ) : saveStatus === "submitting" ? (
                   <Loader2Icon className="mr-2 size-4 animate-spin" />
                 ) : (

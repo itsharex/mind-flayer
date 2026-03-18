@@ -31,10 +31,10 @@
 [data-streamdown="link"] {
   text-decoration: none;
   padding-bottom: 1px;
-  border-bottom: 1px dotted oklch(from var(--color-brand-green) l c h / 0.5);
+  border-bottom: 1px dotted oklch(from var(--color-brand) l c h / 0.5);
 }
 [data-streamdown="link"]:hover {
-  color: var(--color-brand-green);
+  color: var(--color-brand);
 }
 
 .app-chat {

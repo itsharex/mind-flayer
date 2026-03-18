@@ -412,7 +412,7 @@ export function ChannelTelegramChat() {
                                       {session.isActive ? (
                                         <CircleDot
                                           aria-hidden
-                                          className="size-3 text-status-active"
+                                          className="size-3 text-status-positive"
                                         />
                                       ) : (
                                         <ArchiveIcon aria-hidden className="size-3" />

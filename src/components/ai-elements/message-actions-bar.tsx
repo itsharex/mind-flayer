@@ -59,7 +59,7 @@ export const CopyButton = ({
             {...props}
           >
             {copied ? (
-              <CheckIcon className="size-3.5 text-brand-green" />
+              <CheckIcon className="size-3.5 text-brand" />
             ) : (
               <CopyIcon className="size-3.5" />
             )}

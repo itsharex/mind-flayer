@@ -54,9 +54,9 @@
   --chat-input-bg-color: oklch(1 0 0);
   --chat-input-hover-bg-color: oklch(0.965 0 0);
   --chat-input-placeholder-color: oklch(0.61 0 271.152);
-  --brand-green-color: oklch(0.683 0.195 148.32);
-  --brand-green-color-light: oklch(0.943 0.03539 159.839);
-  --status-active-color: oklch(0.723 0.219 149.579);
+  --brand-color: oklch(0.683 0.195 148.32);
+  --brand-soft-color: oklch(0.943 0.03539 159.839);
+  --status-positive-color: oklch(0.723 0.219 149.579);
   --status-notification-color: oklch(0.623 0.214 259.815);
   --setting-background: oklch(0.97315 0 271.152);
   --setting-sidebar: oklch(0.94611 0 271.152);
@@ -106,9 +106,9 @@
   --chat-input-bg-color: oklch(0.309 0 271.152);
   --chat-input-hover-bg-color: oklch(0.359 0 271.152);
   --chat-input-placeholder-color: oklch(0.683 0 271.152);
-  --brand-green-color: oklch(0.62117 0.17972 148.03);
-  --brand-green-color-light: oklch(0.45467 0.1285 148.952);
-  --status-active-color: oklch(0.792 0.209 151.711);
+  --brand-color: oklch(0.62117 0.17972 148.03);
+  --brand-soft-color: oklch(0.45467 0.1285 148.952);
+  --status-positive-color: oklch(0.723 0.219 149.579);
   --status-notification-color: oklch(0.707 0.165 254.624);
   --shiki-dark-bg: oklch(0.24776 0 271.152);
   --setting-background: oklch(0.23075 0 271.152);
@@ -172,9 +172,9 @@
   --color-chat-input-bg: var(--chat-input-bg-color);
   --color-chat-input-hover-bg: var(--chat-input-hover-bg-color);
   --color-chat-input-placeholder: var(--chat-input-placeholder-color);
-  --color-brand-green: var(--brand-green-color);
-  --color-brand-green-light: var(--brand-green-color-light);
-  --color-status-active: var(--status-active-color);
+  --color-brand: var(--brand-color);
+  --color-brand-soft: var(--brand-soft-color);
+  --color-status-positive: var(--status-positive-color);
   --color-status-notification: var(--status-notification-color);
   --color-setting-background: var(--setting-background);
   --color-setting-sidebar: var(--setting-sidebar);

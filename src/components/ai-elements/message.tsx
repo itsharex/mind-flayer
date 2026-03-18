@@ -46,7 +46,7 @@ export const MessageContent = ({ children, className, ...props }: MessageContent
       "group-[.is-user]:ml-auto group-[.is-user]:bg-secondary group-[.is-user]:text-foreground",
       "group-[.is-user]:px-4 group-[.is-user]:pt-2 group-[.is-user]:pb-2.25",
       "group-[.is-user]:rounded-lg group-[.is-user]:rounded-tr-none",
-      "group-[.is-user]:bg-brand-green-light",
+      "group-[.is-user]:bg-brand-soft",
       "group-[.is-assistant]:text-foreground",
       className
     )}
