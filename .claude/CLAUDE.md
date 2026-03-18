@@ -238,6 +238,31 @@ const { t } = useTranslation("settings")
 <Button>{t("providers.save")}</Button>
 ```
 
+## Verification Commands
+
+After making code changes, run the appropriate checks before committing:
+
+| Scope                     | Command                | Description                                                           |
+| ------------------------- | ---------------------- | --------------------------------------------------------------------- |
+| Frontend lint + typecheck | `pnpm check:frontend`  | Biome lint/format with auto-fix + `tsc --noEmit` (frontend + sidecar) |
+| Frontend lint only        | `pnpm lint:frontend`   | Biome lint with auto-fix                                              |
+| Frontend format           | `pnpm format:frontend` | Biome format with auto-fix                                            |
+| Frontend tests            | `pnpm test:frontend`   | Run Vitest (frontend)                                                 |
+| Backend check             | `pnpm check:backend`   | `cargo check` for Rust code                                           |
+| Backend format            | `pnpm format:backend`  | `cargo fmt` for Rust code                                             |
+| Backend tests             | `pnpm test:backend`    | `cargo test` for Rust code                                            |
+| i18n check                | `pnpm check:i18n`      | Verify translation completeness (en ↔ zh-CN)                          |
+| TypeScript only           | `pnpm typecheck`       | `tsc --noEmit` for frontend + sidecar                                 |
+| All format                | `pnpm format`          | Format frontend + backend                                             |
+| All tests                 | `pnpm test`            | Run frontend + backend tests                                          |
+
+**When to run**:
+- Frontend TS/TSX/CSS changes → `pnpm check:frontend`
+- Rust `.rs` / `Cargo.toml` changes → `pnpm check:backend`
+- Translation key changes → `pnpm check:i18n`
+- Sidecar TS changes → `pnpm typecheck` (includes sidecar via `-F sidecar typecheck`)
+- Before committing → lefthook pre-commit runs all relevant checks automatically
+
 ## Best Practices
 
 **DO**:
