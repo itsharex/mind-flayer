@@ -1393,15 +1393,6 @@ const AppChatInner = ({
                               modelId={metadata?.modelId}
                               modelLabel={metadata?.modelLabel}
                               modelPricing={messageModelPricing}
-                              onLike={() => {
-                                /** noop */
-                              }}
-                              onDislike={() => {
-                                /** noop */
-                              }}
-                              onShare={() => {
-                                /** noop */
-                              }}
                               onRefresh={() => {
                                 void regenerate({ messageId: message.id })
                               }}

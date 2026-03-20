@@ -101,8 +101,6 @@ export function useActionConstants() {
       copied: t("copied"),
       copiedSuccess: t("copiedSuccess"),
       edit: t("edit"),
-      like: t("like"),
-      dislike: t("dislike"),
       regenerate: t("regenerate")
     }),
     [t]

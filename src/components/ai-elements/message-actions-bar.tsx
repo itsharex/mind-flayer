@@ -1,12 +1,5 @@
 import type { LanguageModelUsage } from "ai"
-import {
-  CheckIcon,
-  CopyIcon,
-  PencilIcon,
-  RefreshCwIcon,
-  ThumbsDownIcon,
-  ThumbsUpIcon
-} from "lucide-react"
+import { CheckIcon, CopyIcon, PencilIcon, RefreshCwIcon } from "lucide-react"
 import type { ComponentProps } from "react"
 import { useCallback, useState } from "react"
 import { TokenUsageDetails } from "@/components/ai-elements/token-usage-details"
@@ -124,9 +117,6 @@ export const UserMessageActionsBar = ({
 // Assistant message actions bar (always visible)
 export type AssistantMessageActionsBarProps = ComponentProps<"div"> & {
   messageText: string
-  onLike?: () => void
-  onDislike?: () => void
-  onShare?: () => void
   onRefresh?: () => void
   showRefresh?: boolean
   tokenInfo?: LanguageModelUsage
@@ -142,9 +132,6 @@ export type AssistantMessageActionsBarProps = ComponentProps<"div"> & {
 
 export const AssistantMessageActionsBar = ({
   messageText,
-  onLike,
-  onDislike,
-  onShare,
   onRefresh,
   showRefresh = true,
   tokenInfo,
@@ -159,49 +146,11 @@ export const AssistantMessageActionsBar = ({
   className,
   ...props
 }: AssistantMessageActionsBarProps) => {
-  const { like, dislike, regenerate } = useActionConstants()
+  const { regenerate } = useActionConstants()
 
   return (
     <div className={cn("flex items-center gap-0.5 text-muted-foreground", className)} {...props}>
       <CopyButton text={messageText} />
-      <TooltipProvider>
-        <Tooltip disableHoverableContent={true}>
-          <TooltipTrigger asChild>
-            <Button
-              size="icon-xs"
-              type="button"
-              variant="ghost"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={onLike}
-            >
-              <ThumbsUpIcon className="size-3.5" />
-              <span className="sr-only">{like}</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <p>{like}</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      <TooltipProvider>
-        <Tooltip disableHoverableContent={true}>
-          <TooltipTrigger asChild>
-            <Button
-              size="icon-xs"
-              type="button"
-              variant="ghost"
-              className="text-muted-foreground hover:text-foreground"
-              onClick={onDislike}
-            >
-              <ThumbsDownIcon className="size-3.5" />
-              <span className="sr-only">{dislike}</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <p>{dislike}</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
       {showRefresh && (
         <TooltipProvider>
           <Tooltip disableHoverableContent={true}>

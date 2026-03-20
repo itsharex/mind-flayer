@@ -47,6 +47,7 @@ export const MessageContent = ({ children, className, ...props }: MessageContent
       "group-[.is-user]:px-4 group-[.is-user]:pt-2 group-[.is-user]:pb-2.25",
       "group-[.is-user]:rounded-lg group-[.is-user]:rounded-tr-none",
       "group-[.is-user]:bg-brand-soft",
+      "group-[.is-user]:max-w-[75%]",
       "group-[.is-assistant]:text-foreground",
       className
     )}
