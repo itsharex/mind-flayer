@@ -97,7 +97,7 @@ export function NavChats({
                 <span className="truncate">{chat.title}</span>
               </SidebarMenuButton>
               <SidebarMenuBadge
-                className="text-muted-foreground/60 group-hover/menu-item:opacity-0 data-[hidden=true]:opacity-0"
+                className="text-muted-foreground/60 transition-opacity group-hover/menu-item:opacity-0 group-focus-within/menu-item:opacity-0 data-[hidden=true]:opacity-0"
                 data-hidden={openMenuId === chat.id}
               >
                 {isReplying ? (

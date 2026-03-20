@@ -567,7 +567,7 @@ function SidebarMenuAction({
         "group-data-[collapsible=icon]:hidden",
         "cursor-pointer",
         showOnHover &&
-          "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 sm:opacity-0",
+          "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground opacity-0 group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100 data-[state=open]:opacity-100",
         className
       )}
       {...props}

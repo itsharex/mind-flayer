@@ -46,10 +46,6 @@
     "hideSidebar": "收起侧栏",
     "toggleSidebar": "切换侧栏"
   },
-  "footer": {
-    "github": "Github",
-    "copyrightWithLink": "AI 生成的内容，仅供参考。"
-  },
   "channelChat": {
     "title": "Telegram 线程",
     "refreshFailed": "刷新 Telegram 线程失败。",

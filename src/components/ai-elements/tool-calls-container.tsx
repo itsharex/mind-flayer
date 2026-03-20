@@ -31,8 +31,9 @@ import {
   ToolCallTrigger,
   ToolCallWebSearchResults
 } from "@/components/ai-elements/tool-call"
+import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import type { ReadToolDisplayContext, ReadToolInput, ReadToolOutput } from "@/lib/tool-helpers"
 import { cn } from "@/lib/utils"
 import { Separator } from "../ui/separator"
@@ -537,8 +538,8 @@ export type ToolCallsSummaryData = {
 }
 
 const TOOL_CALLS_SUMMARY_BADGE_STYLES = {
-  tools: "text-brand/90",
-  skills: "text-brand/90"
+  tools: "text-brand/90 hover:text-brand/90",
+  skills: "text-brand/90 hover:text-brand/90"
 } as const
 
 const getToolSummarySkillContext = (
@@ -582,33 +583,48 @@ type ToolCallsSummaryBadgeProps = {
 }
 
 const ToolCallsSummaryBadge = ({ badgeType, icon, label, names }: ToolCallsSummaryBadgeProps) => (
-  <Tooltip disableHoverableContent={true}>
-    <TooltipTrigger asChild>
-      <button
+  <HoverCard closeDelay={100} openDelay={100}>
+    <HoverCardTrigger asChild>
+      <Button
         aria-label={label}
         className={cn(
-          "inline-flex cursor-default items-center gap-1 rounded-full",
-          "text-xs whitespace-nowrap outline-none transition-colors",
-          "focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2",
+          "h-6 text-xs font-medium whitespace-nowrap px-1 has-[>svg]:px-1.5",
           TOOL_CALLS_SUMMARY_BADGE_STYLES[badgeType]
         )}
         data-summary-badge={badgeType}
+        size="sm"
         type="button"
+        variant="ghost"
       >
         {icon}
         <span>{label}</span>
-      </button>
-    </TooltipTrigger>
-    <TooltipContent className="max-w-72 px-3 py-2" data-summary-tooltip={badgeType} side="top">
-      <div className="flex flex-col gap-1">
-        {names.map(name => (
-          <p className="leading-5" key={`${badgeType}-${name}`}>
-            {name}
-          </p>
-        ))}
+      </Button>
+    </HoverCardTrigger>
+    <HoverCardContent
+      side="top"
+      align="start"
+      className="w-auto p-3"
+      data-summary-tooltip={badgeType}
+      sideOffset={8}
+    >
+      <div className="space-y-3">
+        <p className="text-xs font-medium">{label}</p>
+        <div className="space-y-2">
+          <Separator />
+          <div className="space-y-1.5">
+            {names.map(name => (
+              <p
+                className="text-xs leading-relaxed text-muted-foreground"
+                key={`${badgeType}-${name}`}
+              >
+                {name}
+              </p>
+            ))}
+          </div>
+        </div>
       </div>
-    </TooltipContent>
-  </Tooltip>
+    </HoverCardContent>
+  </HoverCard>
 )
 
 export type ToolCallsSummaryProps = ComponentProps<"div"> & {
@@ -628,7 +644,7 @@ export const ToolCallsSummary = memo(
 
     return (
       <div
-        className={cn("flex w-full flex-wrap items-center gap-2.5 pb-1 text-xs", className)}
+        className={cn("flex w-full flex-wrap items-center gap-1.5 text-xs", className)}
         {...props}
       >
         {hasToolBadge && (

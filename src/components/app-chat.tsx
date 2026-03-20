@@ -1455,7 +1455,7 @@ const AppChatInner = ({
 
           {/* Chat Input */}
           <div
-            className="relative w-full max-w-(--chat-content-max-width) pb-4"
+            className="relative w-full max-w-(--chat-content-max-width) pb-2"
             ref={inputContainerRef}
           >
             <PromptInput globalDrop multiple onSubmit={handleSubmit}>
@@ -1552,18 +1552,6 @@ const AppChatInner = ({
             </PromptInput>
           </div>
         </div>
-      </div>
-
-      {/* Copyright */}
-      <div
-        className={cn(
-          "absolute bottom-0.5 flex max-h-3 items-center justify-center",
-          "max-w-(--chat-content-max-width) mx-auto left-0 right-0",
-          "text-[9px] text-muted-foreground/50 shadow-none",
-          "overflow-hidden whitespace-nowrap text-ellipsis"
-        )}
-      >
-        {t("common:footer.copyrightWithLink")}
       </div>
     </div>
   )

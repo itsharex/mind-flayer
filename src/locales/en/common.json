@@ -46,10 +46,6 @@
     "hideSidebar": "Hide Sidebar",
     "toggleSidebar": "Toggle Sidebar"
   },
-  "footer": {
-    "github": "Github",
-    "copyrightWithLink": "AI-generated content, for reference only."
-  },
   "channelChat": {
     "title": "Telegram Threads",
     "refreshFailed": "Failed to refresh Telegram threads.",

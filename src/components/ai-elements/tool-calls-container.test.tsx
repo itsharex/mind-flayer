@@ -67,16 +67,42 @@ const createSkillReadPart = (toolCallId: string, skillName: string) =>
     }
   }) as unknown as ToolUIPart
 
+async function wait(ms: number) {
+  await new Promise<void>(resolve => {
+    setTimeout(resolve, ms)
+  })
+}
+
+async function hover(element: Element, delayMs = 0) {
+  await act(async () => {
+    element.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true }))
+    element.dispatchEvent(new PointerEvent("pointermove", { bubbles: true }))
+    element.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
+    element.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }))
+    if (element instanceof HTMLElement) {
+      element.focus()
+    }
+    await wait(delayMs > 0 ? delayMs : 10)
+  })
+}
+
 describe("ToolCallsSummary", () => {
   let container: HTMLDivElement
   let root: Root
   let previousActEnvironment: boolean | undefined
   let previousLanguage: string
+  let previousPointerEvent: typeof PointerEvent | undefined
 
   beforeAll(() => {
     previousActEnvironment = (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean })
       .IS_REACT_ACT_ENVIRONMENT
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+    previousPointerEvent = globalThis.PointerEvent
+    if (typeof globalThis.PointerEvent === "undefined") {
+      ;(globalThis as { PointerEvent?: typeof PointerEvent }).PointerEvent =
+        MouseEvent as typeof PointerEvent
+    }
   })
 
   beforeEach(() => {
@@ -89,6 +115,7 @@ describe("ToolCallsSummary", () => {
   afterAll(() => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
       previousActEnvironment
+    ;(globalThis as { PointerEvent?: typeof PointerEvent }).PointerEvent = previousPointerEvent
   })
 
   afterEach(async () => {
@@ -136,10 +163,7 @@ describe("ToolCallsSummary", () => {
     const toolBadge = container.querySelector('[data-summary-badge="tools"]')
     expect(toolBadge).not.toBeNull()
 
-    await act(async () => {
-      ;(toolBadge as HTMLElement).focus()
-      await Promise.resolve()
-    })
+    await hover(toolBadge as HTMLElement, 100)
 
     expect(document.body.textContent).toContain("Web search")
     expect(document.body.textContent).toContain("Read file")
@@ -147,10 +171,7 @@ describe("ToolCallsSummary", () => {
     const skillBadge = container.querySelector('[data-summary-badge="skills"]')
     expect(skillBadge).not.toBeNull()
 
-    await act(async () => {
-      ;(skillBadge as HTMLElement).focus()
-      await Promise.resolve()
-    })
+    await hover(skillBadge as HTMLElement, 100)
 
     expect(document.body.textContent).toContain("Postgres Expert")
   })
