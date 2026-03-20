@@ -118,7 +118,7 @@ export function ContextWindowUsageDetails({
   const progressColor = usageView ? RING_COLOR_BY_LEVEL[usageView.level] : null
 
   return (
-    <div className="space-y-1.5 w-58">
+    <div className="space-y-1.5 w-48">
       <p className="text-xs font-medium">{t("contextWindowUsage.title")}</p>
       {usageView && detailSummary && percentText ? (
         <div className="space-y-2" data-testid="context-window-usage-details">

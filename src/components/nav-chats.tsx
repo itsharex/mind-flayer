@@ -117,7 +117,9 @@ export function NavChats({
                     <span className="sr-only">{t("nav.unread")}</span>
                   </>
                 ) : (
-                  formatCreatedAge(chat.created_at, now)
+                  <span className="text-muted-foreground/60">
+                    {formatCreatedAge(chat.created_at, now)}
+                  </span>
                 )}
               </SidebarMenuBadge>
               <DropdownMenu onOpenChange={open => setOpenMenuId(open ? chat.id : null)}>
