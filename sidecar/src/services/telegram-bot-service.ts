@@ -723,7 +723,7 @@ export class TelegramBotService {
         stopWhen: Object.keys(tools).length > 0 ? stepCountIs(20) : stepCountIs(1),
         onChunk: ({ chunk }) => {
           const chunkType = (chunk as { type: string }).type
-          if (chunkType !== "text" && chunkType !== "text-delta") {
+          if (chunkType === "source" || chunkType === "raw") {
             return
           }
 

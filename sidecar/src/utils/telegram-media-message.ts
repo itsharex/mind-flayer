@@ -169,18 +169,6 @@ function resolveLocalPath(source: string, depth = 0): string | null {
   return normalize(trimmedSource)
 }
 
-function buildPlaceholder(type: "image" | "file", label: string, filePath: string): string {
-  const safeLabel = label.trim() || basename(filePath)
-  return type === "image" ? `[image: ${safeLabel}]` : `[file: ${safeLabel}]`
-}
-
-function normalizeSanitizedText(text: string): string {
-  return text
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim()
-}
-
 function resolveMimeType(filePath: string): string {
   const extension = extname(filePath).toLowerCase()
   return MIME_TYPE_BY_EXTENSION[extension] ?? "application/octet-stream"
@@ -251,28 +239,14 @@ export async function transformTelegramMediaMessage(
 ): Promise<TelegramMediaTransformResult> {
   const warnings: string[] = []
   const uploads: TelegramMediaUpload[] = []
-  let cursor = 0
-  let output = ""
-  let localMediaFound = false
 
   const matches = collectMarkdownMatches(text)
   for (const match of matches) {
-    if (match.start < cursor) {
-      continue
-    }
-
-    output += text.slice(cursor, match.start)
-    cursor = match.end
-
     const source = unwrapMarkdownTarget(match.rawTarget)
     const localPath = resolveLocalPath(source)
     if (!localPath) {
-      output += match.fullMatch
       continue
     }
-
-    localMediaFound = true
-    output += buildPlaceholder(match.type === "image" ? "image" : "file", match.altText, localPath)
 
     try {
       const fileStats = await stat(localPath)
@@ -296,21 +270,8 @@ export async function transformTelegramMediaMessage(
     }
   }
 
-  if (cursor < text.length) {
-    output += text.slice(cursor)
-  }
-
-  if (!localMediaFound) {
-    return {
-      sanitizedText: text.trim(),
-      uploads,
-      warnings
-    }
-  }
-
-  const sanitizedText = normalizeSanitizedText(output)
   return {
-    sanitizedText: sanitizedText || "Media attached.",
+    sanitizedText: text.trim(),
     uploads,
     warnings
   }

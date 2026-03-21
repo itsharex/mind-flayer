@@ -38,10 +38,10 @@ describe("transformTelegramMediaMessage", () => {
     await rm(tempDir, { recursive: true, force: true })
   })
 
-  it("transforms image markdown and returns photo upload", async () => {
+  it("keeps image markdown text and returns photo upload", async () => {
     const result = await transformTelegramMediaMessage(`Done.\n![screenshot](${imagePath})`)
 
-    expect(result.sanitizedText).toBe("Done.\n[image: screenshot]")
+    expect(result.sanitizedText).toBe(`Done.\n![screenshot](${imagePath})`)
     expect(result.uploads).toHaveLength(1)
     expect(result.uploads[0]?.kind).toBe("photo")
     expect(result.uploads[0]?.filename).toBe("shot.png")
@@ -57,9 +57,7 @@ describe("transformTelegramMediaMessage", () => {
 
     const result = await transformTelegramMediaMessage(content)
 
-    expect(result.sanitizedText).toContain("[file: clip]")
-    expect(result.sanitizedText).toContain("[file: voice]")
-    expect(result.sanitizedText).toContain("[file: note]")
+    expect(result.sanitizedText).toBe(content)
     expect(result.uploads.map(upload => upload.kind)).toEqual(["video", "audio", "document"])
   })
 
@@ -67,7 +65,7 @@ describe("transformTelegramMediaMessage", () => {
     const fileUrl = `file://${imagePath}`
     const result = await transformTelegramMediaMessage(`![shot](${fileUrl})`)
 
-    expect(result.sanitizedText).toBe("[image: shot]")
+    expect(result.sanitizedText).toBe(`![shot](${fileUrl})`)
     expect(result.uploads).toHaveLength(1)
     expect(result.uploads[0]?.kind).toBe("photo")
   })
