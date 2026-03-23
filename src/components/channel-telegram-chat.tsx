@@ -243,7 +243,6 @@ export function ChannelTelegramChat() {
         await refreshAll({ preferredSelectedSessionKey })
         toast.success(t("toast.channelThreadDeleted"))
       } catch (error) {
-        console.error("[ChannelTelegramChat] Failed to delete Telegram thread:", error)
         toast.error(t("toast.error"), {
           description:
             error instanceof Error ? error.message : t("toast.failedToDeleteChannelThread")

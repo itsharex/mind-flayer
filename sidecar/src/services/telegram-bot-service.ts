@@ -36,6 +36,8 @@ const TELEGRAM_NEW_SESSION_COMMAND = /^\/new(?:@[A-Za-z0-9_]+)?$/u
 const TELEGRAM_NEW_SESSION_DESCRIPTION = "Start a new conversation"
 const TELEGRAM_NEW_SESSION_CONFIRMATION =
   "Started a new session. Your next message will use a fresh context."
+const TELEGRAM_NEW_SESSION_FAILURE = "Error: Failed to start a new session. Please try again."
+const TELEGRAM_RESPONSE_FAILURE = "Error: Failed to generate response. Please try again."
 
 interface TelegramApiResponse<T> {
   ok: boolean
@@ -607,8 +609,13 @@ export class TelegramBotService {
     }
 
     if (this.isNewSessionCommand(message.text)) {
-      await this.createSession(chatId)
-      await this.sendTextMessage(chatId, TELEGRAM_NEW_SESSION_CONFIRMATION)
+      try {
+        await this.createSession(chatId)
+        await this.sendTextMessage(chatId, TELEGRAM_NEW_SESSION_CONFIRMATION)
+      } catch (error) {
+        console.error("[TelegramBotService] Failed to start new session:", error)
+        await this.sendTextMessage(chatId, TELEGRAM_NEW_SESSION_FAILURE)
+      }
       return
     }
 
@@ -617,8 +624,6 @@ export class TelegramBotService {
     if (!incomingText) {
       return
     }
-
-    const sessionKey = await this.getOrCreateActiveSessionKey(chatId)
 
     const selectedModel = this.channelRuntimeConfigService.getSelectedModel()
     if (!selectedModel) {
@@ -648,10 +653,6 @@ export class TelegramBotService {
       console.error("[TelegramBotService] Failed to create model:", error)
       return
     }
-
-    const history = this.sessionMessages.get(sessionKey) ?? []
-    const messagesWithLatestInput = [...history, this.createTextMessage("user", incomingText)]
-    await this.setSessionMessages(sessionKey, messagesWithLatestInput)
 
     let currentChatAction: TelegramChatAction = "typing"
     let chatActionAbortController: AbortController | null = null
@@ -708,9 +709,14 @@ export class TelegramBotService {
       }
     }
 
-    startChatActionLoop()
-
     try {
+      const sessionKey = await this.getOrCreateActiveSessionKey(chatId)
+      const history = this.sessionMessages.get(sessionKey) ?? []
+      const messagesWithLatestInput = [...history, this.createTextMessage("user", incomingText)]
+      await this.setSessionMessages(sessionKey, messagesWithLatestInput)
+
+      startChatActionLoop()
+
       const tools = this.toolService.getRequestTools({
         useWebSearch: true,
         chatId: this.toSafeToolSessionId(sessionKey),
@@ -847,7 +853,7 @@ export class TelegramBotService {
       ])
     } catch (error) {
       console.error("[TelegramBotService] Failed to process message:", error)
-      await this.sendTextMessage(chatId, "Error: Failed to generate response. Please try again.")
+      await this.sendTextMessage(chatId, TELEGRAM_RESPONSE_FAILURE)
     } finally {
       await stopChatActionLoop()
     }
@@ -1425,7 +1431,10 @@ export class TelegramBotService {
     }
 
     for (const [chatId, sessionKey] of Object.entries(snapshot.activeSessionKeyByChatId)) {
-      if (this.sessionMessages.has(sessionKey)) {
+      if (
+        this.sessionMessages.has(sessionKey) &&
+        this.extractChatIdFromSessionKey(sessionKey) === chatId
+      ) {
         this.activeSessionKeyByChatId.set(chatId, sessionKey)
       }
     }

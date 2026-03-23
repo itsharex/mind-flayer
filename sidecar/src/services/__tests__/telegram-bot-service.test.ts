@@ -737,6 +737,270 @@ describe("TelegramBotService", () => {
     ).toBe(false)
   })
 
+  it("sends a fallback error reply when creating the first session fails to persist", async () => {
+    const fetchMock = vi.fn(() => telegramApiSuccess({ message_id: 51 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: ["4101"]
+        }
+      }
+    })
+    const sessionStore = {
+      load: vi.fn().mockResolvedValue({
+        sessions: [],
+        activeSessionKeyByChatId: {}
+      }),
+      save: vi.fn().mockRejectedValue(new Error("persist failed"))
+    }
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService,
+      sessionStore as never
+    )
+    await service.initialize()
+
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
+      }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 211,
+      chat: {
+        id: 4101,
+        type: "private"
+      },
+      from: {
+        id: 4101,
+        is_bot: false
+      },
+      text: "hello"
+    })
+
+    const sendMessageCalls = (fetchMock.mock.calls as readonly unknown[][]).filter(call =>
+      String(call.at(0)).endsWith("/sendMessage")
+    )
+    expect(sendMessageCalls).toHaveLength(1)
+    const [sendMessageCall] = sendMessageCalls
+    expect(sendMessageCall).toBeDefined()
+    expect(
+      parseMockCallJsonBody<{ text: string }>(sendMessageCall as readonly unknown[]).text
+    ).toBe("Error: Failed to generate response. Please try again.")
+    expect(streamTextMock).not.toHaveBeenCalled()
+    expect(service.listSessions()).toHaveLength(0)
+  })
+
+  it("sends a fallback error reply when updating the active session fails to persist", async () => {
+    const fetchMock = vi.fn(() => telegramApiSuccess({ message_id: 52 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: ["4102"]
+        }
+      }
+    })
+
+    const existingSessionKey = "telegram:4102:session-a"
+    const initialMessages = [
+      {
+        id: "message-1",
+        role: "user" as const,
+        parts: [{ type: "text" as const, text: "existing" }]
+      }
+    ]
+    const sessionStore = {
+      load: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            sessionKey: existingSessionKey,
+            chatId: "4102",
+            startedAt: 10,
+            updatedAt: 20,
+            messages: initialMessages
+          }
+        ],
+        activeSessionKeyByChatId: {
+          "4102": existingSessionKey
+        }
+      }),
+      save: vi.fn().mockRejectedValue(new Error("persist failed"))
+    }
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService,
+      sessionStore as never
+    )
+    await service.initialize()
+
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
+      }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 212,
+      chat: {
+        id: 4102,
+        type: "private"
+      },
+      from: {
+        id: 4102,
+        is_bot: false
+      },
+      text: "hello again"
+    })
+
+    const sendMessageCalls = (fetchMock.mock.calls as readonly unknown[][]).filter(call =>
+      String(call.at(0)).endsWith("/sendMessage")
+    )
+    expect(sendMessageCalls).toHaveLength(1)
+    const [sendMessageCall] = sendMessageCalls
+    expect(sendMessageCall).toBeDefined()
+    expect(
+      parseMockCallJsonBody<{ text: string }>(sendMessageCall as readonly unknown[]).text
+    ).toBe("Error: Failed to generate response. Please try again.")
+    expect(streamTextMock).not.toHaveBeenCalled()
+    expect(service.getSessionMessages(existingSessionKey)).toEqual(initialMessages)
+  })
+
+  it("sends a fallback error reply when /new fails to persist the new session", async () => {
+    const fetchMock = vi.fn(() => telegramApiSuccess({ message_id: 53 }))
+    vi.stubGlobal("fetch", fetchMock)
+
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: ["4103"]
+        }
+      }
+    })
+    const sessionStore = {
+      load: vi.fn().mockResolvedValue({
+        sessions: [],
+        activeSessionKeyByChatId: {}
+      }),
+      save: vi.fn().mockRejectedValue(new Error("persist failed"))
+    }
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService,
+      sessionStore as never
+    )
+    await service.initialize()
+
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
+      }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 213,
+      chat: {
+        id: 4103,
+        type: "private"
+      },
+      from: {
+        id: 4103,
+        is_bot: false
+      },
+      text: "/new"
+    })
+
+    const sendMessageCalls = (fetchMock.mock.calls as readonly unknown[][]).filter(call =>
+      String(call.at(0)).endsWith("/sendMessage")
+    )
+    expect(sendMessageCalls).toHaveLength(1)
+    const [sendMessageCall] = sendMessageCalls
+    expect(sendMessageCall).toBeDefined()
+    expect(
+      parseMockCallJsonBody<{ text: string }>(sendMessageCall as readonly unknown[]).text
+    ).toBe("Error: Failed to start a new session. Please try again.")
+    expect(service.listSessions()).toHaveLength(0)
+  })
+
   it("persists full session history without truncation and restores it on startup", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "mind-flayer-telegram-store-"))
     tempDirs.push(tempDir)
@@ -1217,6 +1481,74 @@ describe("TelegramBotService", () => {
 
     expect(sessionStore.save).toHaveBeenCalledTimes(2)
     expect(service.getSessionMessages(initialSessionKey)).toEqual(changedMessagesTwo)
+  })
+
+  it("ignores restored active-session mappings that point to another chat", async () => {
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    const mismatchedSessionKey = "telegram:6002:session-a"
+    const sessionStore = {
+      load: vi.fn().mockResolvedValue({
+        sessions: [
+          {
+            sessionKey: mismatchedSessionKey,
+            chatId: "6002",
+            startedAt: 10,
+            updatedAt: 20,
+            messages: [
+              {
+                id: "message-1",
+                role: "user",
+                parts: [{ type: "text", text: "other chat history" }]
+              }
+            ]
+          }
+        ],
+        activeSessionKeyByChatId: {
+          "6001": mismatchedSessionKey
+        }
+      }),
+      save: vi.fn().mockResolvedValue(undefined)
+    }
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService,
+      sessionStore as never
+    )
+    await service.initialize()
+
+    expect(service.listSessions()[0]?.isActive).toBe(false)
+
+    const nextSessionKey = await (
+      service as unknown as {
+        getOrCreateActiveSessionKey: (chatId: string) => Promise<string>
+      }
+    ).getOrCreateActiveSessionKey("6001")
+
+    expect(nextSessionKey).not.toBe(mismatchedSessionKey)
+    expect(
+      service.listSessions().find(session => session.sessionKey === mismatchedSessionKey)?.isActive
+    ).toBe(false)
+    expect(
+      service.listSessions().find(session => session.sessionKey === nextSessionKey)?.chatId
+    ).toBe("6001")
+    expect(
+      service.listSessions().find(session => session.sessionKey === nextSessionKey)?.isActive
+    ).toBe(true)
   })
 
   it("stores assistant usage metadata on messages and session summaries", async () => {
