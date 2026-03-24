@@ -148,6 +148,27 @@ describe("handleRemoteImage", () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it.each([
+    "0.0.0.7",
+    "100.64.12.34",
+    "224.0.0.1",
+    "255.255.255.255"
+  ])("returns 400 when a hostname resolves to special-use IPv4 address %s", async address => {
+    lookupMock.mockResolvedValue([
+      {
+        address,
+        family: 4
+      }
+    ])
+
+    const res = await app.request(
+      `/api/remote-image?url=${encodeURIComponent("https://special.example/photo.png")}`
+    )
+
+    expect(res.status).toBe(400)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it("returns 400 when a redirect target resolves to a private IP", async () => {
     const cancelMock = vi.fn()
     lookupMock.mockImplementation(async hostname => {
@@ -223,6 +244,20 @@ describe("handleRemoteImage", () => {
   it("returns 400 for literal IPv4-mapped private IPv6 image URLs", async () => {
     const res = await app.request(
       `/api/remote-image?url=${encodeURIComponent("https://[::ffff:0:7f00:1]/photo.png")}`
+    )
+
+    expect(res.status).toBe(400)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    "0.0.0.7",
+    "100.64.12.34",
+    "224.0.0.1",
+    "255.255.255.255"
+  ])("returns 400 for literal special-use IPv4 image URL %s", async address => {
+    const res = await app.request(
+      `/api/remote-image?url=${encodeURIComponent(`https://${address}/photo.png`)}`
     )
 
     expect(res.status).toBe(400)

@@ -17,13 +17,17 @@ function isPrivateIpv4Address(hostname: string): boolean {
     return false
   }
 
-  const [first, second] = octets
+  const [first, second, third, fourth] = octets
   return (
+    first === 0 ||
     first === 10 ||
     first === 127 ||
+    (first === 100 && second >= 64 && second <= 127) ||
     (first === 169 && second === 254) ||
     (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168)
+    (first === 192 && second === 168) ||
+    (first >= 224 && first <= 239) ||
+    (first === 255 && second === 255 && third === 255 && fourth === 255)
   )
 }
 
