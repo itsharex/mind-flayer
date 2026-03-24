@@ -17,6 +17,7 @@ import { handleChat } from "./chat"
 import { handleCleanupWorkspace } from "./cleanup"
 import { handleHealth } from "./health"
 import { handleLocalImage } from "./local-image"
+import { handleRemoteImage } from "./remote-image"
 import { handleDeleteSkill, handleGetSkillDetail, handleListSkills } from "./skills"
 import { handleTitleGenerator } from "./title"
 
@@ -44,6 +45,7 @@ export function registerRoutes(
 
   // Local image proxy endpoint
   app.get("/api/local-image", handleLocalImage)
+  app.get("/api/remote-image", handleRemoteImage)
 
   // Workspace cleanup endpoint
   app.post("/api/cleanup-workspace", handleCleanupWorkspace)
