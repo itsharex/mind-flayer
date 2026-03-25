@@ -11,7 +11,7 @@
   },
   "names": {
     "webSearch": "Web search",
-    "bashExecution": "Bash execution",
+    "bashExecution": "Bash exec",
     "read": "Read file"
   },
   "states": {
@@ -22,7 +22,8 @@
     "awaitingApproval": "Awaiting approval..."
   },
   "bashExecution": {
-    "exitCode": "Exit {{code}}"
+    "exitCode": "Exit {{code}}",
+    "stderr": "stderr"
   },
   "webSearch": {
     "searching": "Searching...",

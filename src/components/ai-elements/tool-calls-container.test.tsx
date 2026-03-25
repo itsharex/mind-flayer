@@ -2,10 +2,11 @@ import type { ToolUIPart } from "ai"
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { I18nextProvider } from "react-i18next"
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   collectToolCallsSummary,
-  ToolCallsSummary
+  ToolCallsSummary,
+  ToolCallTimelineItem
 } from "@/components/ai-elements/tool-calls-container"
 import i18n from "@/lib/i18n"
 
@@ -42,6 +43,71 @@ const createBashPart = (toolCallId: string) =>
       exitCode: 0,
       workingDir: "/tmp",
       executedAt: "2026-03-17T12:00:00.000Z"
+    }
+  }) as unknown as ToolUIPart
+
+const createBashPartWithOutput = (
+  toolCallId: string,
+  output: {
+    stdout: string
+    stderr: string
+    exitCode?: number
+  }
+) =>
+  ({
+    type: "tool-bashExecution",
+    toolCallId,
+    state: "output-available",
+    input: {
+      command: "pwd",
+      args: []
+    },
+    output: {
+      command: "pwd",
+      args: [],
+      stdout: output.stdout,
+      stderr: output.stderr,
+      exitCode: output.exitCode ?? 0,
+      workingDir: "/tmp",
+      executedAt: "2026-03-17T12:00:00.000Z"
+    }
+  }) as unknown as ToolUIPart
+
+const createBashApprovalPart = (toolCallId: string) =>
+  ({
+    type: "tool-bashExecution",
+    toolCallId,
+    state: "approval-requested",
+    approval: {
+      id: "approval-1"
+    },
+    input: {
+      command: "ls",
+      args: ["-la"]
+    }
+  }) as unknown as ToolUIPart
+
+const createBashErrorPart = (toolCallId: string) =>
+  ({
+    type: "tool-bashExecution",
+    toolCallId,
+    state: "output-error",
+    errorText: "Command execution failed",
+    input: {
+      command: "cat",
+      args: ["missing.txt"]
+    }
+  }) as unknown as ToolUIPart
+
+const createBashDeniedPart = (toolCallId: string) =>
+  ({
+    type: "tool-bashExecution",
+    toolCallId,
+    state: "output-denied",
+    errorText: "Execution denied",
+    input: {
+      command: "rm",
+      args: ["-rf", "/tmp/demo"]
     }
   }) as unknown as ToolUIPart
 
@@ -82,6 +148,13 @@ async function hover(element: Element, delayMs = 0) {
     if (element instanceof HTMLElement) {
       element.focus()
     }
+    await wait(delayMs > 0 ? delayMs : 10)
+  })
+}
+
+async function click(element: Element, delayMs = 0) {
+  await act(async () => {
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true }))
     await wait(delayMs > 0 ? delayMs : 10)
   })
 }
@@ -203,5 +276,136 @@ describe("ToolCallsSummary", () => {
     expect(container.querySelector('[data-summary-badge="tools"]')).toBeNull()
     expect(container.querySelector('[data-summary-badge="skills"]')).toBeNull()
     expect(container.querySelectorAll('[data-slot="separator"]')).toHaveLength(0)
+  })
+
+  it("renders bash output in a single terminal transcript", async () => {
+    await act(async () => {
+      await i18n.changeLanguage("en")
+      root.render(
+        <I18nextProvider i18n={i18n}>
+          <ToolCallTimelineItem
+            duration={0.25}
+            onToolApprovalResponse={vi.fn()}
+            part={createBashPart("tool-bash")}
+          />
+        </I18nextProvider>
+      )
+    })
+
+    const trigger = container.querySelector("button[aria-controls]")
+    expect(trigger).not.toBeNull()
+
+    await click(trigger as HTMLElement)
+
+    const terminal = container.querySelector('[data-terminal="true"]')
+    expect(terminal).not.toBeNull()
+    expect(container.textContent).toContain("$ pwd")
+    expect(container.textContent).toContain("/tmp")
+    expect(container.querySelectorAll('[data-terminal="true"]')).toHaveLength(1)
+  })
+
+  it("renders stdout and stderr together in the bash terminal transcript", async () => {
+    await act(async () => {
+      await i18n.changeLanguage("en")
+      root.render(
+        <I18nextProvider i18n={i18n}>
+          <ToolCallTimelineItem
+            duration={0.25}
+            onToolApprovalResponse={vi.fn()}
+            part={createBashPartWithOutput("tool-bash-stdout-stderr", {
+              stdout: "stdout line",
+              stderr: "stderr line"
+            })}
+          />
+        </I18nextProvider>
+      )
+    })
+
+    const trigger = container.querySelector("button[aria-controls]")
+    expect(trigger).not.toBeNull()
+
+    await click(trigger as HTMLElement)
+
+    expect(container.textContent).toContain("$ pwd")
+    expect(container.textContent).toContain("stdout line")
+    expect(container.textContent).toContain("stderr:")
+    expect(container.textContent).toContain("stderr line")
+  })
+
+  it("keeps approval actions while showing bash input with terminal styling", async () => {
+    const onToolApprovalResponse = vi.fn()
+
+    await act(async () => {
+      await i18n.changeLanguage("en")
+      root.render(
+        <I18nextProvider i18n={i18n}>
+          <ToolCallTimelineItem
+            duration={0.25}
+            onToolApprovalResponse={onToolApprovalResponse}
+            part={createBashApprovalPart("tool-bash-approval")}
+          />
+        </I18nextProvider>
+      )
+    })
+
+    expect(container.querySelector('[data-terminal="true"]')).not.toBeNull()
+    expect(container.textContent).toContain("$ ls -la")
+
+    const approveButton = Array.from(container.querySelectorAll("button")).find(button =>
+      button.textContent?.includes("Approve")
+    )
+    expect(approveButton).not.toBeUndefined()
+
+    await click(approveButton as HTMLButtonElement)
+
+    expect(onToolApprovalResponse).toHaveBeenCalledWith({ id: "approval-1", approved: true })
+  })
+
+  it("keeps error semantics while rendering bash input in a terminal", async () => {
+    await act(async () => {
+      await i18n.changeLanguage("en")
+      root.render(
+        <I18nextProvider i18n={i18n}>
+          <ToolCallTimelineItem
+            duration={0.25}
+            onToolApprovalResponse={vi.fn()}
+            part={createBashErrorPart("tool-bash-error")}
+          />
+        </I18nextProvider>
+      )
+    })
+
+    const trigger = container.querySelector("button[aria-controls]")
+    expect(trigger).not.toBeNull()
+
+    await click(trigger as HTMLElement)
+
+    expect(container.querySelector('[data-terminal="true"]')).not.toBeNull()
+    expect(container.textContent).toContain("$ cat missing.txt")
+    expect(container.textContent).toContain("Command execution failed")
+  })
+
+  it("keeps denied semantics while rendering bash input in a terminal", async () => {
+    await act(async () => {
+      await i18n.changeLanguage("en")
+      root.render(
+        <I18nextProvider i18n={i18n}>
+          <ToolCallTimelineItem
+            duration={0.25}
+            onToolApprovalResponse={vi.fn()}
+            part={createBashDeniedPart("tool-bash-denied")}
+          />
+        </I18nextProvider>
+      )
+    })
+
+    const trigger = container.querySelector("button[aria-controls]")
+    expect(trigger).not.toBeNull()
+
+    await click(trigger as HTMLElement)
+
+    expect(container.querySelector('[data-terminal="true"]')).not.toBeNull()
+    expect(container.textContent).toContain("$ rm -rf /tmp/demo")
+    expect(container.textContent).toContain("Execution denied")
   })
 })

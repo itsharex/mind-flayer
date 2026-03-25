@@ -34,9 +34,46 @@ import {
 } from "@/lib/tool-helpers"
 import { cn } from "@/lib/utils"
 
-const THINKING_STREAMDOWN_COMPONENTS = {
-  img: () => null
+type ThinkingCodeProps = ComponentProps<"code"> & {
+  "data-block"?: string
+  node?: unknown
 }
+
+const ThinkingPlainTextCode = memo(
+  ({ children, className, node: _node, "data-block": dataBlock, ...props }: ThinkingCodeProps) => {
+    if (dataBlock) {
+      return (
+        <code
+          className={cn(
+            "block whitespace-pre-wrap wrap-break-word text-inherit [font-family:inherit]",
+            className
+          )}
+          data-streamdown="thinking-plain-text-block"
+          {...props}
+        >
+          {children}
+        </code>
+      )
+    }
+
+    return (
+      <code
+        className={cn("rounded bg-muted px-1.5 py-0.5 font-mono text-sm", className)}
+        data-streamdown="inline-code"
+        {...props}
+      >
+        {children}
+      </code>
+    )
+  }
+)
+
+ThinkingPlainTextCode.displayName = "ThinkingPlainTextCode"
+
+const THINKING_STREAMDOWN_COMPONENTS = {
+  img: () => null,
+  code: ThinkingPlainTextCode
+} satisfies NonNullable<ComponentProps<typeof Streamdown>["components"]>
 
 type ThinkingProcessContextValue = {
   isStreaming: boolean

@@ -18,6 +18,7 @@ import { createContext, memo, useCallback, useContext, useEffect, useRef, useSta
 import { useTranslation } from "react-i18next"
 import { Streamdown } from "streamdown"
 import { Shimmer } from "@/components/ai-elements/shimmer"
+import { Terminal } from "@/components/ai-elements/terminal"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useActionConstants, useErrorConstants, useToolConstants } from "@/lib/constants"
@@ -374,6 +375,9 @@ export type BashExecInput = {
   args?: string[]
 }
 
+const BASH_STDERR_ANSI_COLOR = "\u001B[31m"
+const BASH_ANSI_RESET = "\u001B[0m"
+
 export type ToolCallCopyablePreProps = {
   displayText: string
   copyText?: string
@@ -446,37 +450,56 @@ export const ToolCallCopyablePre = memo(
 const formatBashExecCommand = (input?: BashExecInput) =>
   `${input?.command ?? ""} ${input?.args?.join(" ") ?? ""}`.trim()
 
-export const BashExecCommandLine = ({ input }: { input?: BashExecInput }) => {
-  const command = formatBashExecCommand(input)
-  const [copied, setCopied] = useState(false)
-
-  const handleCopy = useCallback(() => {
-    if (!command) return
-    navigator.clipboard.writeText(command)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }, [command])
-
-  if (!command) {
+const normalizeBashExecChunk = (value?: string) => {
+  if (!value || value.trim().length === 0) {
     return null
   }
 
-  return (
-    <div className="rounded-md border border-border/50 bg-muted/50 px-3 py-2">
-      <div className="flex items-start gap-2">
-        <span className="text-xs text-muted-foreground shrink-0">$</span>
-        <code className="text-xs font-mono text-foreground flex-1 break-all">{command}</code>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="shrink-0 text-muted-foreground/50 hover:text-foreground transition-colors"
-        >
-          {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
-        </button>
-      </div>
-    </div>
-  )
+  return value.replace(/\n+$/u, "")
 }
+
+const formatBashExecTranscript = ({
+  input,
+  result,
+  stderrLabel
+}: {
+  input?: BashExecInput
+  result?: Pick<BashExecResult, "stdout" | "stderr">
+  stderrLabel: string
+}) => {
+  const command = formatBashExecCommand(input)
+  const stdout = normalizeBashExecChunk(result?.stdout)
+  const stderr = normalizeBashExecChunk(result?.stderr)
+  const sections: string[] = []
+
+  if (command) {
+    sections.push(`\u001B[36m$\u001B[0m ${command}`)
+  }
+
+  if (stdout) {
+    sections.push(stdout)
+  }
+
+  if (stderr) {
+    sections.push(`${BASH_STDERR_ANSI_COLOR}${stderrLabel}:${BASH_ANSI_RESET}\n${stderr}`)
+  }
+
+  return sections.join("\n\n")
+}
+
+export const BashExecCommandLine = memo(({ input }: { input?: BashExecInput }) => {
+  const { t } = useTranslation("tools")
+  const transcript = formatBashExecTranscript({
+    input,
+    stderrLabel: t("bashExecution.stderr")
+  })
+
+  if (!transcript) {
+    return null
+  }
+
+  return <Terminal className="max-w-full" output={transcript} />
+})
 
 export type ToolCallOutputErrorProps = {
   errorText?: string
@@ -486,7 +509,7 @@ export type ToolCallOutputErrorProps = {
 export const ToolCallOutputError = memo(({ errorText, input }: ToolCallOutputErrorProps) => {
   const errorConstants = useErrorConstants()
   return (
-    <div className="space-y-1 py-1">
+    <div className="space-y-2 py-1">
       <BashExecCommandLine input={input} />
       <div className="flex items-center gap-2">
         <CircleXIcon className="size-3.5 shrink-0 text-destructive" />
@@ -506,7 +529,7 @@ export type ToolCallOutputDeniedProps = {
 export const ToolCallOutputDenied = memo(({ message, input }: ToolCallOutputDeniedProps) => {
   const errorConstants = useErrorConstants()
   return (
-    <div className="space-y-1 py-1">
+    <div className="space-y-2 py-1">
       <BashExecCommandLine input={input} />
       <div className="flex items-center gap-2">
         <CircleXIcon className="size-3.5 shrink-0 text-destructive" />
@@ -573,35 +596,18 @@ export type ToolCallBashExecResultsProps = {
 }
 
 export const ToolCallBashExecResults = memo(({ input, result }: ToolCallBashExecResultsProps) => {
-  const hasStdout = result.stdout && result.stdout.trim().length > 0
-  const hasStderr = result.stderr && result.stderr.trim().length > 0
+  const { t } = useTranslation("tools")
+  const transcript = formatBashExecTranscript({
+    input,
+    result,
+    stderrLabel: t("bashExecution.stderr")
+  })
 
-  return (
-    <div className="space-y-1">
-      <BashExecCommandLine input={input} />
+  if (!transcript) {
+    return null
+  }
 
-      {/* Stdout */}
-      {hasStdout && (
-        <div className="space-y-1">
-          <ToolCallCopyablePre
-            displayText={result.stdout}
-            textClassName="scrollbar-thin max-h-48 overflow-y-auto"
-          />
-        </div>
-      )}
-
-      {/* Stderr */}
-      {hasStderr && !hasStdout && (
-        <div className="space-y-1">
-          <ToolCallCopyablePre
-            displayText={result.stderr}
-            className="border-destructive/50 bg-destructive/5"
-            textClassName="scrollbar-thin max-h-48 overflow-y-auto text-destructive"
-          />
-        </div>
-      )}
-    </div>
-  )
+  return <Terminal className="max-w-full" output={transcript} />
 })
 
 ToolCall.displayName = "ToolCall"

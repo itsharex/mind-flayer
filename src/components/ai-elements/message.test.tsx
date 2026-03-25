@@ -15,7 +15,7 @@ vi.mock("@/lib/window-manager", async () => {
   }
 })
 
-import { MessageResponse } from "@/components/ai-elements/message"
+import { MessageContent, MessageResponse } from "@/components/ai-elements/message"
 
 describe("MessageResponse local image rendering", () => {
   let container: HTMLDivElement
@@ -68,6 +68,19 @@ describe("MessageResponse local image rendering", () => {
     expect(parsedUrl.pathname).toBe("/api/local-image")
     expect(parsedUrl.searchParams.get("path")).toBe(localPath)
     expect(parsedUrl.searchParams.get("_ts")).toBeTruthy()
+  })
+
+  it("does not clip assistant message content overflow", async () => {
+    await act(async () => {
+      root.render(<MessageContent>assistant message</MessageContent>)
+    })
+
+    const content = container.firstElementChild as HTMLDivElement | null
+    const classTokens = content?.className.split(/\s+/) ?? []
+
+    expect(content).not.toBeNull()
+    expect(classTokens).not.toContain("overflow-hidden")
+    expect(classTokens).toContain("group-[.is-user]:overflow-hidden")
   })
 
   it("renders file URL image with sidecar proxy URL", async () => {
