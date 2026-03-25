@@ -251,6 +251,7 @@ export function PromptInputProvider({
 // ============================================================================
 
 const LocalAttachmentsContext = createContext<AttachmentsContext | null>(null)
+const IME_PROCESSING_KEYCODE = 229
 
 export const usePromptInputAttachments = () => {
   // Dual-mode: prefer provider if present, otherwise use local
@@ -778,12 +779,27 @@ export type PromptInputTextareaHandle = {
   focus: () => void
 }
 
+function isImeComposingEnterEvent(
+  event: KeyboardEvent,
+  options: { isComposing: boolean; justEndedComposition: boolean }
+): boolean {
+  return (
+    options.isComposing ||
+    options.justEndedComposition ||
+    event.isComposing ||
+    event.keyCode === IME_PROCESSING_KEYCODE ||
+    event.which === IME_PROCESSING_KEYCODE
+  )
+}
+
 export const PromptInputTextarea = forwardRef<PromptInputTextareaHandle, PromptInputTextareaProps>(
   ({ onChange, className, placeholder, ...props }, ref) => {
     const { t } = useTranslation("chat")
     const controller = useOptionalPromptInputController()
     const attachments = usePromptInputAttachments()
-    const [isComposing, setIsComposing] = useState(false)
+    const isComposingRef = useRef(false)
+    const justEndedCompositionRef = useRef(false)
+    const compositionResetFrameRef = useRef<number | null>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const shortcuts = useShortcutConfig()
 
@@ -808,9 +824,46 @@ export const PromptInputTextarea = forwardRef<PromptInputTextareaHandle, PromptI
       return () => observer.disconnect()
     }, [adjustHeight])
 
+    useEffect(() => {
+      return () => {
+        if (compositionResetFrameRef.current !== null) {
+          cancelAnimationFrame(compositionResetFrameRef.current)
+        }
+      }
+    }, [])
+
+    const handleCompositionStart = () => {
+      if (compositionResetFrameRef.current !== null) {
+        cancelAnimationFrame(compositionResetFrameRef.current)
+        compositionResetFrameRef.current = null
+      }
+
+      justEndedCompositionRef.current = false
+      isComposingRef.current = true
+    }
+
+    const handleCompositionEnd = () => {
+      isComposingRef.current = false
+      justEndedCompositionRef.current = true
+
+      if (compositionResetFrameRef.current !== null) {
+        cancelAnimationFrame(compositionResetFrameRef.current)
+      }
+
+      compositionResetFrameRef.current = requestAnimationFrame(() => {
+        justEndedCompositionRef.current = false
+        compositionResetFrameRef.current = null
+      })
+    }
+
     const handleKeyDown: KeyboardEventHandler<HTMLTextAreaElement> = e => {
       if (e.key === "Enter") {
-        if (isComposing || e.nativeEvent.isComposing) {
+        if (
+          isImeComposingEnterEvent(e.nativeEvent, {
+            isComposing: isComposingRef.current,
+            justEndedComposition: justEndedCompositionRef.current
+          })
+        ) {
           return
         }
 
@@ -940,8 +993,8 @@ export const PromptInputTextarea = forwardRef<PromptInputTextareaHandle, PromptI
           className
         )}
         name="message"
-        onCompositionEnd={() => setIsComposing(false)}
-        onCompositionStart={() => setIsComposing(true)}
+        onCompositionEnd={handleCompositionEnd}
+        onCompositionStart={handleCompositionStart}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         placeholder={placeholder ?? t("input.placeholder")}
