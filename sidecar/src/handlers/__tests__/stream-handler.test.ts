@@ -4,6 +4,7 @@ const streamTextMock = vi.fn()
 const compactMessagesMock = vi.fn()
 const discoverSkillsSafelyMock = vi.fn()
 const buildSystemPromptMock = vi.fn()
+const loadWorkspacePromptContextMock = vi.fn()
 
 vi.mock("ai", () => ({
   InvalidToolInputError: {
@@ -36,6 +37,14 @@ vi.mock("../../utils/system-prompt-builder", async importOriginal => {
   }
 })
 
+vi.mock("../../workspace", async importOriginal => {
+  const actual = await importOriginal<typeof import("../../workspace")>()
+  return {
+    ...actual,
+    loadWorkspacePromptContext: (...args: unknown[]) => loadWorkspacePromptContextMock(...args)
+  }
+})
+
 import { createStreamResponse } from "../stream-handler"
 
 describe("createStreamResponse", () => {
@@ -45,6 +54,12 @@ describe("createStreamResponse", () => {
     discoverSkillsSafelyMock.mockResolvedValue([])
     compactMessagesMock.mockResolvedValue([{ role: "user", parts: [] }])
     buildSystemPromptMock.mockReturnValue("system prompt")
+    loadWorkspacePromptContextMock.mockResolvedValue({
+      workspaceDir: "/tmp/app-support/workspace",
+      needsBootstrap: true,
+      setupCompletedAt: null,
+      files: []
+    })
     streamTextMock.mockReturnValue({
       toUIMessageStreamResponse: vi.fn(() => "stream-response")
     })
@@ -90,6 +105,12 @@ describe("createStreamResponse", () => {
       modelProviderLabel: "MiniMax",
       modelId: "model-a",
       modelLabel: "MiniMax-M2.5",
+      workspaceContext: {
+        workspaceDir: "/tmp/app-support/workspace",
+        needsBootstrap: true,
+        setupCompletedAt: null,
+        files: []
+      },
       skills: [
         {
           id: "bundled:reader",

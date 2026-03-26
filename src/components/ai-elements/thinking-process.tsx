@@ -7,28 +7,18 @@ import {
   type ReasoningUIPart,
   type ToolUIPart
 } from "ai"
-import {
-  BookOpenTextIcon,
-  BrainIcon,
-  ChevronRightIcon,
-  CircleCheckIcon,
-  CircleIcon,
-  GlobeIcon,
-  TerminalIcon,
-  WrenchIcon
-} from "lucide-react"
+import { BrainIcon, ChevronRightIcon, CircleCheckIcon, CircleIcon } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
 import { createContext, memo, useContext } from "react"
 import { useTranslation } from "react-i18next"
 import { Streamdown } from "streamdown"
 import { Shimmer } from "@/components/ai-elements/shimmer"
+import { getToolIcon } from "@/components/ai-elements/tool-icon"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useThinkingConstants, useToolConstants } from "@/lib/constants"
 import {
-  getToolInputMeta,
+  getToolCallMeta,
   getToolResultText,
-  isBashExecutionToolUIPart,
-  isReadToolUIPart,
   isToolUIPartInProgress,
   isWebSearchToolUIPart
 } from "@/lib/tool-helpers"
@@ -271,12 +261,12 @@ const ReasoningPartToolContent = memo(
     // Determine if tool is in progress
     const isToolInProgress = isChatStreaming && isToolUIPart(part) && isToolUIPartInProgress(part)
     const toolConstants = useToolConstants()
-    const toolInputMeta = getToolInputMeta(part, toolConstants)
+    const toolCallMeta = getToolCallMeta(part, toolConstants)
     const toolResult = getToolResultText(part, toolConstants)
 
     return (
       <div className="text-muted-foreground text-xs">
-        <div className="text-xs font-mono">{toolInputMeta?.content || ""}</div>
+        <div className="text-xs">{toolCallMeta?.content || ""}</div>
         {isToolInProgress ? (
           <div className="flex items-center gap-1.5">
             <span>{toolResult || toolRunning}</span>
@@ -292,22 +282,11 @@ export const ReasoningPartHeader = memo(
     const { names } = useToolConstants()
     const { t } = useTranslation(["chat", "tools"])
     const isWebSearchTool = isToolUIPart(part) && isWebSearchToolUIPart(part)
-    const isReadTool = isToolUIPart(part) && isReadToolUIPart(part)
-    const isBashTool = isToolUIPart(part) && isBashExecutionToolUIPart(part)
     const toolName = isToolUIPart(part) ? getToolName(part) : null
 
     const getIcon = () => {
-      if (isWebSearchTool) {
-        return <GlobeIcon className="ml-px size-3" />
-      }
-      if (isReadTool) {
-        return <BookOpenTextIcon className="ml-px size-3" />
-      }
-      if (isBashTool) {
-        return <TerminalIcon className="ml-px size-3" />
-      }
-      if (isToolUIPart(part)) {
-        return <WrenchIcon className="ml-px size-3" />
+      if (isToolUIPart(part) && toolName) {
+        return getToolIcon(toolName, "ml-px size-3")
       }
       return <CircleIcon className="ml-1 size-1.5 text-muted-foreground/80 fill-current" />
     }
@@ -347,11 +326,11 @@ export type ReasoningPartContentProps = ComponentProps<"div"> & {
 
 export const ReasoningPartContent = memo(
   ({ className, children, ...props }: ReasoningPartContentProps) => (
-    <div className={cn("text-muted-foreground pr-4 text-sm", className)} {...props}>
+    <div className={cn("text-muted-foreground pr-4 text-xs", className)} {...props}>
       <Streamdown
         controls={{ table: false }}
         linkSafety={{ enabled: false }}
-        className="streamdown-thinking-process space-y-2.5"
+        className="streamdown-thinking-process space-y-1"
         components={THINKING_STREAMDOWN_COMPONENTS}
       >
         {children}

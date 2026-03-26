@@ -1,19 +1,12 @@
-import { useControllableState } from "@radix-ui/react-use-controllable-state"
 import {
   type ChatAddToolApproveResponseFunction,
   type DynamicToolUIPart,
   getToolName,
   type ToolUIPart
 } from "ai"
-import {
-  ChevronRightIcon,
-  LibraryBigIcon,
-  TerminalIcon,
-  WandSparklesIcon,
-  WrenchIcon
-} from "lucide-react"
+import { LibraryBigIcon, TerminalIcon, WandSparklesIcon, WrenchIcon } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
-import { createContext, memo, useContext } from "react"
+import { memo } from "react"
 import { useTranslation } from "react-i18next"
 import {
   BashExecCommandLine,
@@ -32,144 +25,10 @@ import {
   ToolCallWebSearchResults
 } from "@/components/ai-elements/tool-call"
 import { Button } from "@/components/ui/button"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import type { ReadToolDisplayContext, ReadToolInput, ReadToolOutput } from "@/lib/tool-helpers"
 import { cn } from "@/lib/utils"
 import { Separator } from "../ui/separator"
-
-type ToolCallsContainerContextValue = {
-  isOpen: boolean
-  setIsOpen: (open: boolean) => void
-  toolCount: number
-}
-
-const ToolCallsContainerContext = createContext<ToolCallsContainerContextValue | null>(null)
-
-export const useToolCallsContainer = () => {
-  const context = useContext(ToolCallsContainerContext)
-  if (!context) {
-    throw new Error("ToolCallsContainer components must be used within ToolCallsContainer")
-  }
-  return context
-}
-
-export type ToolCallsContainerProps = ComponentProps<typeof Collapsible> & {
-  open?: boolean
-  defaultOpen?: boolean
-  onOpenChange?: (open: boolean) => void
-  toolCount: number
-}
-
-export const ToolCallsContainer = memo(
-  ({
-    className,
-    open,
-    defaultOpen = true,
-    onOpenChange,
-    toolCount,
-    children,
-    ...props
-  }: ToolCallsContainerProps) => {
-    const [isOpen, setIsOpen] = useControllableState({
-      prop: open,
-      defaultProp: defaultOpen,
-      onChange: onOpenChange
-    })
-
-    const handleOpenChange = (newOpen: boolean) => {
-      setIsOpen(newOpen)
-    }
-
-    return (
-      <ToolCallsContainerContext.Provider value={{ isOpen, setIsOpen, toolCount }}>
-        <div className={cn("rounded-lg p-0", className)}>
-          <Collapsible
-            className="not-prose"
-            onOpenChange={handleOpenChange}
-            open={isOpen}
-            {...props}
-          >
-            {children}
-          </Collapsible>
-        </div>
-      </ToolCallsContainerContext.Provider>
-    )
-  }
-)
-
-export type ToolCallsContainerTriggerProps = ComponentProps<typeof CollapsibleTrigger> & {
-  toolNames?: string[]
-  isAnyToolInProgress?: boolean
-  totalDuration?: number
-  getToolsMessage?: (toolCount: number) => ReactNode
-}
-
-export const ToolCallsContainerTrigger = memo(
-  ({
-    className,
-    children,
-    toolNames = [],
-    totalDuration,
-    getToolsMessage,
-    ...props
-  }: ToolCallsContainerTriggerProps) => {
-    const { isOpen, toolCount } = useToolCallsContainer()
-    const { t } = useTranslation("tools")
-    const defaultMessage = <span>{t("usedTools", { count: toolCount })}</span>
-
-    return (
-      <CollapsibleTrigger
-        className={cn(
-          "flex w-full items-center gap-2 text-muted-foreground text-sm transition-colors hover:text-foreground",
-          className
-        )}
-        {...props}
-      >
-        {children ?? (
-          <>
-            <WrenchIcon className="size-4" />
-            {getToolsMessage ? getToolsMessage(toolCount) : defaultMessage}
-            <ChevronRightIcon
-              className={cn(
-                "size-3.5 transition-transform opacity-50",
-                isOpen ? "rotate-90" : "rotate-0"
-              )}
-            />
-          </>
-        )}
-      </CollapsibleTrigger>
-    )
-  }
-)
-
-export type ToolCallsContainerContentProps = ComponentProps<typeof CollapsibleContent> & {
-  maxHeight?: string
-}
-
-export const ToolCallsContainerContent = memo(
-  ({ className, maxHeight = "24rem", children, ...props }: ToolCallsContainerContentProps) => (
-    <CollapsibleContent
-      className={cn(
-        "relative mt-2 text-sm leading-normal",
-        "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2",
-        "outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
-        className
-      )}
-      {...props}
-    >
-      <div className="overflow-y-auto pr-2">
-        <div className="space-y-3">{children}</div>
-      </div>
-    </CollapsibleContent>
-  )
-)
-
-export type ToolCallsListProps = {
-  toolParts: (ToolUIPart | DynamicToolUIPart)[]
-  onToolApprovalResponse: ChatAddToolApproveResponseFunction
-  toolDurations?: Record<string, number>
-}
 
 export type ToolCallTimelineItemProps = {
   part: ToolUIPart | DynamicToolUIPart
@@ -213,209 +72,63 @@ const ToolCallStructuredBlock = ({ value }: { value: unknown }) => {
   )
 }
 
-const ToolCallWebSearch = ({
-  part,
-  onToolApprovalResponse,
-  duration
-}: {
-  part: ToolUIPart
-  onToolApprovalResponse: ToolCallsListProps["onToolApprovalResponse"]
+type ToolCallFrameProps = {
+  part: ToolUIPart | DynamicToolUIPart
+  toolName: string
+  onToolApprovalResponse: ChatAddToolApproveResponseFunction
   duration?: number
-}) => {
-  const toolCallId = part.toolCallId
-  const input = part.input as {
-    objective: string
-    searchQueries: string[]
-    maxResults?: number
-  }
-  const output =
-    part.state === "output-available"
-      ? (part.output as {
-          query: string
-          results: Array<{
-            title: string
-            url: string
-            snippet: string
-          }>
-          totalResults: number
-        })
-      : null
+  resultCount?: number
+  triggerProps?: ComponentProps<typeof ToolCallTrigger>
+  inputContent?: ReactNode
+  approvalContent?: ReactNode
+  outputContent?: ReactNode
+  errorContent?: ReactNode
+  deniedContent?: ReactNode
+}
 
+const ToolCallFrame = ({
+  part,
+  toolName,
+  onToolApprovalResponse,
+  duration,
+  resultCount,
+  triggerProps,
+  inputContent,
+  approvalContent,
+  outputContent,
+  errorContent,
+  deniedContent
+}: ToolCallFrameProps) => {
   const approvalId = part.approval?.id
 
   return (
     <ToolCall
-      key={toolCallId}
-      toolName="webSearch"
+      key={part.toolCallId}
+      toolName={toolName}
       state={part.state}
       duration={duration}
-      resultCount={output?.totalResults}
+      resultCount={resultCount}
       defaultOpen={false}
     >
-      <ToolCallTrigger />
+      <ToolCallTrigger {...triggerProps} />
       <ToolCallContent>
         {(part.state === "input-streaming" ||
           part.state === "input-available" ||
           part.state === "approval-responded") && (
-          <ToolCallInputStreaming description={input?.objective} />
+          <ToolCallInputStreaming description={inputContent ?? toolName} />
         )}
         {part.state === "approval-requested" && approvalId && (
           <ToolCallApprovalRequested
-            description={input?.objective ?? ""}
+            description={approvalContent ?? inputContent ?? toolName}
             onApprove={() => onToolApprovalResponse({ id: approvalId, approved: true })}
             onDeny={() => onToolApprovalResponse({ id: approvalId, approved: false })}
           />
         )}
-        {part.state === "output-available" && output && (
-          <ToolCallWebSearchResults results={output.results} />
-        )}
-        {part.state === "output-error" && <ToolCallOutputError errorText={part.errorText} />}
-        {part.state === "output-denied" && <ToolCallOutputDenied message={part.errorText} />}
-      </ToolCallContent>
-    </ToolCall>
-  )
-}
-
-const ToolCallBashExec = ({
-  part,
-  onToolApprovalResponse,
-  duration
-}: {
-  part: ToolUIPart
-  onToolApprovalResponse: ToolCallsListProps["onToolApprovalResponse"]
-  duration?: number
-}) => {
-  const toolCallId = part.toolCallId
-  const { t } = useTranslation("tools")
-  const input = part.input as BashExecInput
-  const output = part.state === "output-available" ? (part.output as BashExecResult) : null
-
-  const approvalId = part.approval?.id
-
-  return (
-    <ToolCall
-      key={toolCallId}
-      toolName="bashExecution"
-      state={part.state}
-      duration={duration}
-      defaultOpen={false}
-    >
-      <ToolCallTrigger
-        icon={<TerminalIcon className="size-3.5 transition-colors" />}
-        trailingContent={
-          part.state === "output-available" && output?.exitCode !== undefined ? (
-            <span
-              className={getToolCallStatusBadgeClass(output.exitCode === 0 ? "success" : "error")}
-            >
-              {t("bashExecution.exitCode", { code: output.exitCode })}
-            </span>
-          ) : null
-        }
-      />
-      <ToolCallContent>
-        {(part.state === "input-streaming" ||
-          part.state === "input-available" ||
-          part.state === "approval-responded") && <BashExecCommandLine input={input} />}
-        {part.state === "approval-requested" && approvalId && (
-          <ToolCallApprovalRequested
-            description={<BashExecCommandLine input={input} />}
-            onApprove={() => onToolApprovalResponse({ id: approvalId, approved: true })}
-            onDeny={() => onToolApprovalResponse({ id: approvalId, approved: false })}
-          />
-        )}
-        {part.state === "output-available" && output && (
-          <ToolCallBashExecResults input={input} result={output} />
-        )}
-        {part.state === "output-error" && (
-          <ToolCallOutputError input={input} errorText={part.errorText} />
-        )}
-        {part.state === "output-denied" && (
-          <ToolCallOutputDenied input={input} message={part.errorText} />
-        )}
-      </ToolCallContent>
-    </ToolCall>
-  )
-}
-
-const ToolCallRead = ({
-  part,
-  onToolApprovalResponse,
-  duration
-}: {
-  part: ToolUIPart
-  onToolApprovalResponse: ToolCallsListProps["onToolApprovalResponse"]
-  duration?: number
-}) => {
-  const toolCallId = part.toolCallId
-  const { t } = useTranslation("tools")
-  const input = part.input as ReadToolInput
-  const output = part.state === "output-available" ? (part.output as ReadToolOutput) : null
-  const approvalId = part.approval?.id
-  const inputFilePath = input?.filePath || t("read.emptyFile")
-  const outputFilePath = output?.filePath || t("read.emptyFile")
-  const skillContext = output?.displayContext?.kind === "skill" ? output.displayContext : null
-  return (
-    <ToolCall
-      key={toolCallId}
-      toolName="read"
-      state={part.state}
-      duration={duration}
-      defaultOpen={false}
-    >
-      <ToolCallTrigger>
-        {skillContext ? (
-          <ToolCallSkillBadge
-            skillContext={skillContext}
-            skillLabel={t("skillRead.badge")}
-            fileKindLabel={t(`skillRead.fileKinds.${skillContext.fileKind}`)}
-          />
-        ) : undefined}
-      </ToolCallTrigger>
-      <ToolCallContent>
-        {(part.state === "input-streaming" ||
-          part.state === "input-available" ||
-          part.state === "approval-responded") && (
-          <ToolCallInputStreaming
-            description={
-              <ToolCallCopyablePre
-                displayText={inputFilePath}
-                leadingContent={<LibraryBigIcon className="mt-0.5 size-3" />}
-              />
-            }
-          />
-        )}
-        {part.state === "approval-requested" && approvalId && (
-          <ToolCallApprovalRequested
-            description={
-              <ToolCallCopyablePre
-                displayText={inputFilePath}
-                leadingContent={<LibraryBigIcon className="mt-0.5 size-3" />}
-              />
-            }
-            onApprove={() => onToolApprovalResponse({ id: approvalId, approved: true })}
-            onDeny={() => onToolApprovalResponse({ id: approvalId, approved: false })}
-          />
-        )}
-        {part.state === "output-available" && output && (
-          <div className="space-y-2">
-            <ToolCallCopyablePre
-              displayText={outputFilePath}
-              leadingContent={<LibraryBigIcon className="mt-0.5 size-3" />}
-            />
-            <ToolCallCopyablePre
-              displayText={output.content || t("read.emptyFile")}
-              copyText={output.content}
-              textClassName="scrollbar-thin max-h-70 overflow-y-auto"
-            />
-            {output.truncated && output.nextOffset !== null && (
-              <div className="text-xs text-muted-foreground pl-1">
-                {t("read.nextOffset", { nextOffset: output.nextOffset })}
-              </div>
-            )}
-          </div>
-        )}
-        {part.state === "output-error" && <ToolCallOutputError errorText={part.errorText} />}
-        {part.state === "output-denied" && <ToolCallOutputDenied message={part.errorText} />}
+        {part.state === "output-available" && outputContent}
+        {part.state === "output-error" &&
+          (errorContent ?? <ToolCallOutputError errorText={part.errorText} />)}
+        {part.state === "output-denied" &&
+          (deniedContent ?? <ToolCallOutputDenied message={part.errorText} />)}
       </ToolCallContent>
     </ToolCall>
   )
@@ -446,87 +159,143 @@ const ToolCallSkillBadge = ({
   </div>
 )
 
-const ToolCallGeneric = ({
-  part,
-  onToolApprovalResponse,
-  duration
-}: {
-  part: ToolUIPart | DynamicToolUIPart
-  onToolApprovalResponse: ToolCallsListProps["onToolApprovalResponse"]
-  duration?: number
-}) => {
-  const toolName = getToolName(part)
-  const approvalId = part.approval?.id
-  const input = formatStructuredValue(part.input)
-  const output = formatStructuredValue(part.state === "output-available" ? part.output : null)
-
-  return (
-    <ToolCall
-      key={part.toolCallId}
-      toolName={toolName}
-      state={part.state}
-      duration={duration}
-      defaultOpen={false}
-    >
-      <ToolCallTrigger />
-      <ToolCallContent>
-        {(part.state === "input-streaming" ||
-          part.state === "input-available" ||
-          part.state === "approval-responded") && (
-          <ToolCallInputStreaming description={input ?? toolName} />
-        )}
-        {part.state === "approval-requested" && approvalId && (
-          <ToolCallApprovalRequested
-            description={<ToolCallStructuredBlock value={part.input} />}
-            onApprove={() => onToolApprovalResponse({ id: approvalId, approved: true })}
-            onDeny={() => onToolApprovalResponse({ id: approvalId, approved: false })}
-          />
-        )}
-        {part.state === "output-available" && output && <ToolCallStructuredBlock value={output} />}
-        {part.state === "output-error" && <ToolCallOutputError errorText={part.errorText} />}
-        {part.state === "output-denied" && <ToolCallOutputDenied message={part.errorText} />}
-      </ToolCallContent>
-    </ToolCall>
-  )
-}
-
 export const ToolCallTimelineItem = memo(
   ({ part, onToolApprovalResponse, duration }: ToolCallTimelineItemProps) => {
+    const { t } = useTranslation("tools")
+    const toolName = getToolName(part)
+
     if (part.type === "tool-webSearch") {
+      const input = part.input as {
+        objective: string
+        searchQueries: string[]
+        maxResults?: number
+      }
+      const output =
+        part.state === "output-available"
+          ? (part.output as {
+              query: string
+              results: Array<{
+                title: string
+                url: string
+                snippet: string
+              }>
+              totalResults: number
+            })
+          : null
+
       return (
-        <ToolCallWebSearch
+        <ToolCallFrame
           part={part}
-          duration={duration}
+          toolName={toolName}
           onToolApprovalResponse={onToolApprovalResponse}
+          duration={duration}
+          resultCount={output?.totalResults}
+          inputContent={input?.objective}
+          approvalContent={input?.objective ?? ""}
+          outputContent={output ? <ToolCallWebSearchResults results={output.results} /> : null}
         />
       )
     }
 
     if (part.type === "tool-bashExecution") {
+      const input = part.input as BashExecInput
+      const output = part.state === "output-available" ? (part.output as BashExecResult) : null
+      const commandLine = <BashExecCommandLine input={input} />
+
       return (
-        <ToolCallBashExec
+        <ToolCallFrame
           part={part}
-          duration={duration}
+          toolName={toolName}
           onToolApprovalResponse={onToolApprovalResponse}
+          duration={duration}
+          triggerProps={{
+            icon: <TerminalIcon className="size-3.5 transition-colors" />,
+            trailingContent:
+              part.state === "output-available" && output?.exitCode !== undefined ? (
+                <span
+                  className={getToolCallStatusBadgeClass(
+                    output.exitCode === 0 ? "success" : "error"
+                  )}
+                >
+                  {t("bashExecution.exitCode", { code: output.exitCode })}
+                </span>
+              ) : null
+          }}
+          inputContent={commandLine}
+          approvalContent={commandLine}
+          outputContent={output ? <ToolCallBashExecResults input={input} result={output} /> : null}
+          errorContent={<ToolCallOutputError input={input} errorText={part.errorText} />}
+          deniedContent={<ToolCallOutputDenied input={input} message={part.errorText} />}
         />
       )
     }
 
     if (part.type === "tool-read") {
+      const input = part.input as ReadToolInput
+      const output = part.state === "output-available" ? (part.output as ReadToolOutput) : null
+      const inputFilePath = input?.filePath || t("read.emptyFile")
+      const outputFilePath = output?.filePath || t("read.emptyFile")
+      const skillContext = output?.displayContext?.kind === "skill" ? output.displayContext : null
+      const copyableInput = (
+        <ToolCallCopyablePre
+          displayText={inputFilePath}
+          leadingContent={<LibraryBigIcon className="mt-0.5 size-3" />}
+        />
+      )
+
       return (
-        <ToolCallRead
+        <ToolCallFrame
           part={part}
-          duration={duration}
+          toolName={toolName}
           onToolApprovalResponse={onToolApprovalResponse}
+          duration={duration}
+          triggerProps={{
+            children: skillContext ? (
+              <ToolCallSkillBadge
+                skillContext={skillContext}
+                skillLabel={t("skillRead.badge")}
+                fileKindLabel={t(`skillRead.fileKinds.${skillContext.fileKind}`)}
+              />
+            ) : undefined
+          }}
+          inputContent={copyableInput}
+          approvalContent={copyableInput}
+          outputContent={
+            output ? (
+              <div className="space-y-2">
+                <ToolCallCopyablePre
+                  displayText={outputFilePath}
+                  leadingContent={<LibraryBigIcon className="mt-0.5 size-3" />}
+                />
+                <ToolCallCopyablePre
+                  displayText={output.content || t("read.emptyFile")}
+                  copyText={output.content}
+                  textClassName="scrollbar-thin max-h-70 overflow-y-auto"
+                />
+                {output.truncated && output.nextOffset !== null && (
+                  <div className="text-xs text-muted-foreground pl-1">
+                    {t("read.nextOffset", { nextOffset: output.nextOffset })}
+                  </div>
+                )}
+              </div>
+            ) : null
+          }
         />
       )
     }
 
+    const input = formatStructuredValue(part.input)
+    const output = formatStructuredValue(part.state === "output-available" ? part.output : null)
+
     return (
-      <ToolCallGeneric
+      <ToolCallFrame
         part={part}
-        duration={duration}
+        toolName={toolName}
         onToolApprovalResponse={onToolApprovalResponse}
+        duration={duration}
+        inputContent={input ?? toolName}
+        approvalContent={<ToolCallStructuredBlock value={part.input} />}
+        outputContent={output ? <ToolCallStructuredBlock value={output} /> : null}
       />
     )
   }
@@ -668,25 +437,5 @@ export const ToolCallsSummary = memo(
     )
   }
 )
-
-export const ToolCallsList = memo(
-  ({ toolParts, onToolApprovalResponse, toolDurations }: ToolCallsListProps) => (
-    <ToolCallsContainerContent>
-      {toolParts.map(part => (
-        <ToolCallTimelineItem
-          key={part.toolCallId}
-          part={part}
-          duration={toolDurations?.[part.toolCallId]}
-          onToolApprovalResponse={onToolApprovalResponse}
-        />
-      ))}
-    </ToolCallsContainerContent>
-  )
-)
-
-ToolCallsContainer.displayName = "ToolCallsContainer"
-ToolCallsContainerTrigger.displayName = "ToolCallsContainerTrigger"
-ToolCallsContainerContent.displayName = "ToolCallsContainerContent"
 ToolCallTimelineItem.displayName = "ToolCallTimelineItem"
 ToolCallsSummary.displayName = "ToolCallsSummary"
-ToolCallsList.displayName = "ToolCallsList"

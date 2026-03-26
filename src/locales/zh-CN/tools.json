@@ -8,7 +8,10 @@
   "names": {
     "webSearch": "联网搜索",
     "bashExecution": "Bash 执行",
-    "read": "读取文件"
+    "read": "读取文件",
+    "writeWorkspaceFile": "写入工作区文件",
+    "memorySearch": "搜索记忆",
+    "memoryGet": "读取记忆"
   },
   "states": {
     "running": "运行中...",

@@ -108,7 +108,7 @@ describe("MessageResponse local image rendering", () => {
 
   it("renders file URL image with whitespace in the local path", async () => {
     const fileUrlPath =
-      "file:///Users/didi/Library/Application Support/Mind Flayer/workspaces/shot one.png"
+      "file:///Users/didi/Library/Application Support/Mind Flayer/sandboxes/shot one.png"
 
     await act(async () => {
       root.render(
@@ -131,7 +131,7 @@ describe("MessageResponse local image rendering", () => {
     const proxiedFileUrl = parsedUrl.searchParams.get("path")
     expect(proxiedFileUrl).toBeTruthy()
     expect(decodeURIComponent(new URL(proxiedFileUrl as string).pathname)).toBe(
-      "/Users/didi/Library/Application Support/Mind Flayer/workspaces/shot one.png"
+      "/Users/didi/Library/Application Support/Mind Flayer/sandboxes/shot one.png"
     )
     expect(parsedUrl.searchParams.get("_ts")).toBeTruthy()
   })

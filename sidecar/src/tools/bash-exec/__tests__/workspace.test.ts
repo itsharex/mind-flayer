@@ -3,26 +3,26 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
-  cleanupTransientWorkspaces,
-  cleanupWorkspace,
-  ensureChatWorkspace,
-  getWorkspacePath
-} from "../workspace"
+  cleanupSandbox,
+  cleanupTransientSandboxes,
+  ensureChatSandbox,
+  getSandboxPath
+} from "../sandbox"
 
 const APP_SUPPORT_DIR_ENV_KEY = "MINDFLAYER_APP_SUPPORT_DIR"
 
-describe("workspace manager", () => {
+describe("sandbox manager", () => {
   let previousAppSupportDir: string | undefined
   let testAppSupportDir = ""
 
   beforeEach(async () => {
     previousAppSupportDir = process.env[APP_SUPPORT_DIR_ENV_KEY]
-    testAppSupportDir = await mkdtemp(join(tmpdir(), "mind-flayer-workspaces-test-"))
+    testAppSupportDir = await mkdtemp(join(tmpdir(), "mind-flayer-sandboxes-test-"))
     process.env[APP_SUPPORT_DIR_ENV_KEY] = testAppSupportDir
   })
 
   afterEach(async () => {
-    await cleanupTransientWorkspaces()
+    await cleanupTransientSandboxes()
     await rm(testAppSupportDir, { recursive: true, force: true })
 
     if (previousAppSupportDir === undefined) {
@@ -32,71 +32,81 @@ describe("workspace manager", () => {
     process.env[APP_SUPPORT_DIR_ENV_KEY] = previousAppSupportDir
   })
 
-  it("should create workspace under app support workspaces directory", async () => {
+  it("should create a sandbox under the app support sandboxes directory", async () => {
     const chatId = "chat_abc-123"
-    const workspacePath = await ensureChatWorkspace(chatId)
+    const sandboxPath = await ensureChatSandbox(chatId)
 
-    expect(workspacePath).toMatch(
+    expect(sandboxPath).toMatch(
       new RegExp(
-        `${resolve(testAppSupportDir, "workspaces").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/\\d{8}-\\d{6}__${chatId}$`
+        `${resolve(testAppSupportDir, "sandboxes").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/\\d{8}-\\d{6}__${chatId}$`
       )
     )
-    await expect(access(workspacePath)).resolves.toBeUndefined()
+    await expect(access(sandboxPath)).resolves.toBeUndefined()
 
-    const readme = await readFile(join(workspacePath, "README.md"), "utf-8")
-    expect(readme).toContain("persistent session workspace")
+    const readme = await readFile(join(sandboxPath, "README.md"), "utf-8")
+    expect(readme).toContain("persistent sandbox directory")
   })
 
   it("should reject invalid chatId", async () => {
-    await expect(ensureChatWorkspace("../etc")).rejects.toThrow("Invalid chatId")
+    await expect(ensureChatSandbox("../etc")).rejects.toThrow("Invalid chatId")
   })
 
-  it("should cleanup only target chat workspace", async () => {
-    const workspaceA = await ensureChatWorkspace("chat-one")
-    const workspaceB = await ensureChatWorkspace("chat-two")
+  it("should cleanup only the target chat sandbox", async () => {
+    const sandboxA = await ensureChatSandbox("chat-one")
+    const sandboxB = await ensureChatSandbox("chat-two")
 
-    await cleanupWorkspace("chat-one")
+    await cleanupSandbox("chat-one")
 
-    await expect(access(workspaceA)).rejects.toThrow()
-    await expect(access(workspaceB)).resolves.toBeUndefined()
+    await expect(access(sandboxA)).rejects.toThrow()
+    await expect(access(sandboxB)).resolves.toBeUndefined()
   })
 
-  it("should cleanup both legacy and timestamped workspace names for same chat", async () => {
-    const legacyWorkspace = resolve(testAppSupportDir, "workspaces", "legacy-chat")
-    const timestampedWorkspace = resolve(
+  it("should cleanup both legacy and timestamped sandbox names for the same chat", async () => {
+    const legacySandbox = resolve(testAppSupportDir, "workspaces", "legacy-chat")
+    const timestampedSandbox = resolve(
       testAppSupportDir,
       "workspaces",
       "20260101-010101__legacy-chat"
     )
-    await mkdir(legacyWorkspace, { recursive: true })
-    await mkdir(timestampedWorkspace, { recursive: true })
+    await mkdir(legacySandbox, { recursive: true })
+    await mkdir(timestampedSandbox, { recursive: true })
 
-    await cleanupWorkspace("legacy-chat")
+    await cleanupSandbox("legacy-chat")
 
-    await expect(access(legacyWorkspace)).rejects.toThrow()
-    await expect(access(timestampedWorkspace)).rejects.toThrow()
+    await expect(access(legacySandbox)).rejects.toThrow()
+    await expect(access(timestampedSandbox)).rejects.toThrow()
   })
 
-  it("should cleanup transient workspaces only", async () => {
-    const transientWorkspace = await ensureChatWorkspace("")
-    const persistentWorkspace = await ensureChatWorkspace("chat-stable")
+  it("should cleanup transient sandboxes only", async () => {
+    const transientSandbox = await ensureChatSandbox("")
+    const persistentSandbox = await ensureChatSandbox("chat-stable")
 
-    expect(transientWorkspace).toContain(`${resolve(testAppSupportDir, "workspaces")}/temp-`)
+    expect(transientSandbox).toContain(`${resolve(testAppSupportDir, "sandboxes")}/temp-`)
 
-    await cleanupTransientWorkspaces()
+    await cleanupTransientSandboxes()
 
-    await expect(access(transientWorkspace)).rejects.toThrow()
-    await expect(access(persistentWorkspace)).resolves.toBeUndefined()
+    await expect(access(transientSandbox)).rejects.toThrow()
+    await expect(access(persistentSandbox)).resolves.toBeUndefined()
   })
 
-  it("should resolve workspace path without creating it", async () => {
-    const expectedFallbackPath = resolve(testAppSupportDir, "workspaces", "chat-path")
-    expect(getWorkspacePath("chat-path")).toBe(expectedFallbackPath)
+  it("should resolve sandbox paths with legacy fallback without creating them", async () => {
+    const expectedFallbackPath = resolve(testAppSupportDir, "sandboxes", "chat-path")
+    expect(getSandboxPath("chat-path")).toBe(expectedFallbackPath)
 
-    const createdPath = await ensureChatWorkspace("chat-path")
-    expect(getWorkspacePath("chat-path")).toBe(createdPath)
+    const createdPath = await ensureChatSandbox("chat-path")
+    expect(getSandboxPath("chat-path")).toBe(createdPath)
 
-    expect(() => getWorkspacePath("../unsafe")).toThrow("Invalid chatId")
+    expect(() => getSandboxPath("../unsafe")).toThrow("Invalid chatId")
+  })
+
+  it("should prefer an existing legacy workspace directory for compatibility", async () => {
+    const legacySandbox = resolve(testAppSupportDir, "workspaces", "legacy-chat")
+    await mkdir(legacySandbox, { recursive: true })
+
+    const resolvedPath = await ensureChatSandbox("legacy-chat")
+
+    expect(resolvedPath).toBe(legacySandbox)
+    expect(getSandboxPath("legacy-chat")).toBe(legacySandbox)
   })
 
   it("should require app support directory environment variable", async () => {
@@ -104,10 +114,10 @@ describe("workspace manager", () => {
     delete process.env[APP_SUPPORT_DIR_ENV_KEY]
 
     try {
-      expect(() => getWorkspacePath("chat-path")).toThrow(
+      expect(() => getSandboxPath("chat-path")).toThrow(
         `Environment variable '${APP_SUPPORT_DIR_ENV_KEY}' is required`
       )
-      await expect(ensureChatWorkspace("chat-path")).rejects.toThrow(
+      await expect(ensureChatSandbox("chat-path")).rejects.toThrow(
         `Environment variable '${APP_SUPPORT_DIR_ENV_KEY}' is required`
       )
     } finally {

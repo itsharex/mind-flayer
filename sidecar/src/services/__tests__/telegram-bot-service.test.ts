@@ -8,6 +8,7 @@ const compactMessagesMock = vi.fn()
 const buildSystemPromptMock = vi.fn()
 const discoverSkillsSafelyMock = vi.fn()
 const buildToolChoiceMock = vi.fn()
+const loadWorkspacePromptContextMock = vi.fn()
 
 vi.mock("ai", () => ({
   stepCountIs: vi.fn((value: number) => value),
@@ -37,6 +38,14 @@ vi.mock("../../skills/catalog", async importOriginal => {
 vi.mock("../../utils/tool-choice", () => ({
   buildToolChoice: (...args: unknown[]) => buildToolChoiceMock(...args)
 }))
+
+vi.mock("../../workspace", async importOriginal => {
+  const actual = await importOriginal<typeof import("../../workspace")>()
+  return {
+    ...actual,
+    loadWorkspacePromptContext: (...args: unknown[]) => loadWorkspacePromptContextMock(...args)
+  }
+})
 
 import { ConflictError } from "../../utils/http-errors"
 import * as telegramMediaMessageModule from "../../utils/telegram-media-message"
@@ -131,6 +140,12 @@ describe("TelegramBotService", () => {
     buildSystemPromptMock.mockReturnValue("system prompt")
     discoverSkillsSafelyMock.mockResolvedValue([])
     buildToolChoiceMock.mockReturnValue("auto")
+    loadWorkspacePromptContextMock.mockResolvedValue({
+      workspaceDir: "/tmp/app-support/workspace",
+      needsBootstrap: true,
+      setupCompletedAt: null,
+      files: []
+    })
   })
 
   afterEach(async () => {
@@ -557,7 +572,13 @@ describe("TelegramBotService", () => {
       modelId: "model-a",
       modelLabel: "MiniMax-M2.5",
       channel: "telegram",
-      skills: []
+      skills: [],
+      workspaceContext: {
+        workspaceDir: "/tmp/app-support/workspace",
+        needsBootstrap: true,
+        setupCompletedAt: null,
+        files: []
+      }
     })
 
     const sessions = service.listSessions()
@@ -1824,7 +1845,13 @@ describe("TelegramBotService", () => {
       modelId: "model-a",
       modelLabel: "MiniMax-M2.5",
       channel: "telegram",
-      skills: []
+      skills: [],
+      workspaceContext: {
+        workspaceDir: "/tmp/app-support/workspace",
+        needsBootstrap: true,
+        setupCompletedAt: null,
+        files: []
+      }
     })
     expect(discoverSkillsSafelyMock).toHaveBeenCalledWith("Telegram request")
     expect(streamTextMock).toHaveBeenCalled()
@@ -1934,7 +1961,13 @@ describe("TelegramBotService", () => {
           description: "Bundled reader",
           location: "~/skills/builtin/reader/SKILL.md"
         }
-      ]
+      ],
+      workspaceContext: {
+        workspaceDir: "/tmp/app-support/workspace",
+        needsBootstrap: true,
+        setupCompletedAt: null,
+        files: []
+      }
     })
   })
 

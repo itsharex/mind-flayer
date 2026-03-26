@@ -60,6 +60,58 @@ export type ToolRead = ToolUIPart & {
   output?: ReadToolOutput
 }
 
+export type WriteWorkspaceFileInput = {
+  path: string
+  operation: "write" | "append" | "delete"
+  content?: string
+}
+
+export type WriteWorkspaceFileOutput = {
+  path: string
+  absolutePath: string
+  operation: "write" | "append" | "delete"
+  bytesWritten: number
+}
+
+export type ToolWriteWorkspaceFile = ToolUIPart & {
+  input?: WriteWorkspaceFileInput
+  output?: WriteWorkspaceFileOutput
+}
+
+export type MemorySearchInput = {
+  query: string
+  maxResults?: number
+}
+
+export type MemorySearchOutput = {
+  query: string
+}
+
+export type ToolMemorySearch = ToolUIPart & {
+  input?: MemorySearchInput
+  output?: MemorySearchOutput
+}
+
+export type MemoryGetInput = {
+  path: string
+  startLine?: number
+  endLine?: number
+}
+
+export type MemoryGetOutput = {
+  path: string
+  absolutePath: string
+  exists: boolean
+  content: string
+  startLine: number | null
+  endLine: number | null
+}
+
+export type ToolMemoryGet = ToolUIPart & {
+  input?: MemoryGetInput
+  output?: MemoryGetOutput
+}
+
 // Determine if tool is in progress
 export const isToolUIPartInProgress = (part: ToolUIPart | DynamicToolUIPart): boolean =>
   part.state === "input-streaming" ||
@@ -78,7 +130,41 @@ export const isBashExecutionToolUIPart = (
 export const isReadToolUIPart = (tool: ToolUIPart | DynamicToolUIPart): tool is ToolRead =>
   tool.type === "tool-read"
 
-export function getToolInputMeta(
+export const isWriteWorkspaceFileToolUIPart = (
+  tool: ToolUIPart | DynamicToolUIPart
+): tool is ToolWriteWorkspaceFile => tool.type === "tool-writeWorkspaceFile"
+
+export const isMemorySearchToolUIPart = (
+  tool: ToolUIPart | DynamicToolUIPart
+): tool is ToolMemorySearch => tool.type === "tool-memorySearch"
+
+export const isMemoryGetToolUIPart = (
+  tool: ToolUIPart | DynamicToolUIPart
+): tool is ToolMemoryGet => tool.type === "tool-memoryGet"
+
+function decodeFileUrlPath(path: string): string {
+  try {
+    return decodeURIComponent(new URL(path).pathname)
+  } catch {
+    return path
+  }
+}
+
+function getWorkspaceRelativePath(path?: string): string {
+  const trimmedPath = path?.trim() ?? ""
+  if (!trimmedPath) {
+    return ""
+  }
+
+  const normalizedPath = (
+    trimmedPath.startsWith("file://") ? decodeFileUrlPath(trimmedPath) : trimmedPath
+  ).replaceAll("\\", "/")
+  const workspacePrefixMatch = normalizedPath.match(/(?:^|\/)workspace\/(.+)$/)
+
+  return workspacePrefixMatch?.[1] ?? normalizedPath
+}
+
+export function getToolCallMeta(
   tool: ToolUIPart | DynamicToolUIPart,
   toolConstants: ReturnType<typeof useToolConstants>
 ): { content?: string } | null {
@@ -87,7 +173,7 @@ export function getToolInputMeta(
   }
   if (isBashExecutionToolUIPart(tool) && tool.input) {
     return {
-      content: `$ ${tool.input.command} ${tool.input.args?.join(" ")}`
+      content: `${tool.input.command} ${tool.input.args?.join(" ")}`
     }
   }
   if (isReadToolUIPart(tool) && tool.input) {
@@ -96,6 +182,21 @@ export function getToolInputMeta(
         typeof tool.input.offset === "number" && tool.input.offset > 0
           ? toolConstants.read.inputWithOffset(tool.input.filePath, tool.input.offset)
           : toolConstants.read.input(tool.input.filePath)
+    }
+  }
+  if (isWriteWorkspaceFileToolUIPart(tool)) {
+    return {
+      content: getWorkspaceRelativePath(tool.output?.path || tool.input?.path)
+    }
+  }
+  if (isMemorySearchToolUIPart(tool)) {
+    return {
+      content: tool.output?.query || tool.input?.query || ""
+    }
+  }
+  if (isMemoryGetToolUIPart(tool)) {
+    return {
+      content: getWorkspaceRelativePath(tool.output?.path || tool.input?.path)
     }
   }
   return null

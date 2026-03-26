@@ -4,6 +4,7 @@
  */
 
 import type { SkillCatalogEntry } from "../skills/catalog"
+import type { WorkspacePromptContext } from "../workspace"
 
 type SkillPromptEntry = Pick<
   SkillCatalogEntry,
@@ -17,6 +18,7 @@ export interface BuildSystemPromptOptions {
   modelLabel?: string
   channel?: string
   skills?: SkillPromptEntry[]
+  workspaceContext?: WorkspacePromptContext
 }
 
 /**
@@ -108,6 +110,44 @@ function buildSkillsPromptSection(options: BuildSystemPromptOptions): string {
   return lines.join("\n")
 }
 
+function buildWorkspacePromptSection(options: BuildSystemPromptOptions): string {
+  const workspaceContext = options.workspaceContext
+  if (!workspaceContext) {
+    return [
+      "## Project Context",
+      "The global agent workspace is unavailable for this request.",
+      "Do not assume BOOTSTRAP.md, MEMORY.md, or daily memory files were loaded."
+    ].join("\n")
+  }
+
+  const fileSections =
+    workspaceContext.files.length > 0
+      ? workspaceContext.files.map(file =>
+          [
+            `<workspace_file path="${escapeXmlAttribute(file.path)}" absolute_path="${escapeXmlAttribute(file.absolutePath)}"${file.truncated ? ' truncated="true"' : ""}>`,
+            file.content,
+            "</workspace_file>"
+          ].join("\n")
+        )
+      : ["No workspace prompt files were loaded."]
+
+  return [
+    "## Project Context",
+    `Shared workspace root: ${workspaceContext.workspaceDir}`,
+    "- Treat injected workspace files as the source of truth for identity, behavior, and long-term context.",
+    "- BOOTSTRAP.md is passive: if it is present below, follow it in this conversation and delete it with writeWorkspaceFile when onboarding is complete.",
+    "- Use writeWorkspaceFile only for approved files inside the shared workspace.",
+    "- Daily memory files under memory/ are not injected automatically. Use memorySearch and memoryGet when you need recent history.",
+    `- bootstrap_active: ${workspaceContext.needsBootstrap ? "true" : "false"}`,
+    workspaceContext.setupCompletedAt !== null
+      ? `- setup_completed_at: ${workspaceContext.setupCompletedAt}`
+      : "- setup_completed_at: null",
+    "<workspace_context>",
+    ...fileSections,
+    "</workspace_context>"
+  ].join("\n")
+}
+
 /**
  * Build system context including environment and time info.
  *
@@ -172,6 +212,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     buildRoleContext(),
     buildResponseFormatRules(options.channel),
     buildSkillsPromptSection(options) || null,
+    buildWorkspacePromptSection(options),
     buildRuntimeContext(options)
   ]
     .filter(Boolean)

@@ -12,7 +12,10 @@
   "names": {
     "webSearch": "Web search",
     "bashExecution": "Bash exec",
-    "read": "Read file"
+    "read": "Read file",
+    "writeWorkspaceFile": "Write workspace file",
+    "memorySearch": "Search memory",
+    "memoryGet": "Read memory"
   },
   "states": {
     "running": "Running...",
