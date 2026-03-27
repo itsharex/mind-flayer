@@ -4,7 +4,7 @@ const streamTextMock = vi.fn()
 const compactMessagesMock = vi.fn()
 const discoverSkillsSafelyMock = vi.fn()
 const buildSystemPromptMock = vi.fn()
-const loadWorkspacePromptContextMock = vi.fn()
+const loadWorkspacePromptContextSafelyMock = vi.fn()
 
 vi.mock("ai", () => ({
   InvalidToolInputError: {
@@ -41,7 +41,8 @@ vi.mock("../../workspace", async importOriginal => {
   const actual = await importOriginal<typeof import("../../workspace")>()
   return {
     ...actual,
-    loadWorkspacePromptContext: (...args: unknown[]) => loadWorkspacePromptContextMock(...args)
+    loadWorkspacePromptContextSafely: (...args: unknown[]) =>
+      loadWorkspacePromptContextSafelyMock(...args)
   }
 })
 
@@ -54,7 +55,7 @@ describe("createStreamResponse", () => {
     discoverSkillsSafelyMock.mockResolvedValue([])
     compactMessagesMock.mockResolvedValue([{ role: "user", parts: [] }])
     buildSystemPromptMock.mockReturnValue("system prompt")
-    loadWorkspacePromptContextMock.mockResolvedValue({
+    loadWorkspacePromptContextSafelyMock.mockResolvedValue({
       workspaceDir: "/tmp/app-support/workspace",
       needsBootstrap: true,
       setupCompletedAt: null,
@@ -66,7 +67,6 @@ describe("createStreamResponse", () => {
   })
 
   it("uses safe skill discovery for stream requests", async () => {
-    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     discoverSkillsSafelyMock.mockResolvedValueOnce([
       {
         id: "bundled:reader",
@@ -123,9 +123,34 @@ describe("createStreamResponse", () => {
     })
     expect(streamTextMock).toHaveBeenCalled()
     expect(discoverSkillsSafelyMock).toHaveBeenCalledWith("stream request")
-    expect(consoleWarnSpy).not.toHaveBeenCalled()
+  })
 
-    consoleWarnSpy.mockRestore()
+  it("continues without workspace context when workspace loading fails", async () => {
+    loadWorkspacePromptContextSafelyMock.mockResolvedValueOnce(undefined)
+
+    const response = await createStreamResponse({
+      model: {} as never,
+      modelProvider: "minimax",
+      modelProviderLabel: "MiniMax",
+      modelId: "model-a",
+      modelLabel: "MiniMax-M2.5",
+      messages: [{ role: "user", parts: [] }] as never,
+      tools: {},
+      toolChoice: "auto" as never,
+      abortSignal: new AbortController().signal,
+      reasoningEnabled: true,
+      reasoningEffort: "default"
+    })
+
+    expect(response).toBe("stream-response")
+    expect(buildSystemPromptMock).toHaveBeenCalledWith({
+      modelProvider: "minimax",
+      modelProviderLabel: "MiniMax",
+      modelId: "model-a",
+      modelLabel: "MiniMax-M2.5",
+      skills: [],
+      workspaceContext: undefined
+    })
   })
 
   it("passes providerOptions to streamText for supported anthropic models", async () => {

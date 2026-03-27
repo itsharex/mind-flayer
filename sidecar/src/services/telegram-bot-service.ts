@@ -12,7 +12,7 @@ import {
 } from "../utils/telegram-media-message"
 import { toTelegramHtml } from "../utils/telegram-rich-text"
 import { buildToolChoice } from "../utils/tool-choice"
-import { loadWorkspacePromptContext } from "../workspace"
+import { loadWorkspacePromptContextSafely } from "../workspace"
 import type { ChannelRuntimeConfigService } from "./channel-runtime-config-service"
 import type { ProviderService } from "./provider-service"
 import type {
@@ -745,7 +745,7 @@ export class TelegramBotService {
       const [skills, modelMessages, workspaceContext] = await Promise.all([
         discoverSkillsSafely("Telegram request"),
         compactMessages(messagesWithLatestInput, tools),
-        loadWorkspacePromptContext()
+        loadWorkspacePromptContextSafely("Telegram request")
       ])
       const enabledSkills = filterDisabledSkills(
         skills,

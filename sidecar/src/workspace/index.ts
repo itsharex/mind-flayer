@@ -1,6 +1,7 @@
 import { constants as fsConstants } from "node:fs"
 import {
   access,
+  appendFile,
   lstat,
   mkdir,
   readdir,
@@ -66,6 +67,15 @@ export interface MemorySearchResult {
   endLine: number
   snippet: string
   score: number
+}
+
+function createEmptyWorkspacePromptContext(workspaceDir: string): WorkspacePromptContext {
+  return {
+    workspaceDir,
+    needsBootstrap: false,
+    setupCompletedAt: null,
+    files: []
+  }
 }
 
 function getAppSupportDir(): string {
@@ -254,21 +264,30 @@ export async function markBootstrapCompleted(): Promise<void> {
 }
 
 async function readTextFileIfExists(filePath: string): Promise<string | null> {
-  if (!(await pathExists(filePath))) {
+  try {
+    if (!(await pathExists(filePath))) {
+      return null
+    }
+
+    const entryInfo = await lstat(filePath)
+    if (entryInfo.isSymbolicLink()) {
+      return null
+    }
+
+    const fileStats = await stat(filePath)
+    if (!fileStats.isFile()) {
+      return null
+    }
+
+    return await readFile(filePath, "utf8")
+  } catch (error) {
+    console.warn(
+      `[Workspace] Failed to read '${filePath}', treating it as unavailable: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
     return null
   }
-
-  const entryInfo = await lstat(filePath)
-  if (entryInfo.isSymbolicLink()) {
-    return null
-  }
-
-  const fileStats = await stat(filePath)
-  if (!fileStats.isFile()) {
-    return null
-  }
-
-  return readFile(filePath, "utf8")
 }
 
 async function resolveExactWorkspaceFileName(
@@ -340,48 +359,72 @@ export async function getWorkspaceStatus(): Promise<WorkspaceStatus> {
 
 export async function loadWorkspacePromptContext(): Promise<WorkspacePromptContext> {
   const workspaceDir = getAgentWorkspaceRoot()
-  const status = await getWorkspaceStatus()
-  const longTermMemoryFileName = await resolveLongTermMemoryFileName(workspaceDir)
-  const candidateFiles = [
-    "AGENTS.md",
-    "SOUL.md",
-    "IDENTITY.md",
-    "USER.md",
-    status.needsBootstrap ? BOOTSTRAP_FILE_NAME : null,
-    longTermMemoryFileName
-  ].filter((value): value is string => Boolean(value))
+  try {
+    const status = await getWorkspaceStatus()
+    const longTermMemoryFileName = await resolveLongTermMemoryFileName(workspaceDir)
+    const candidateFiles = [
+      "AGENTS.md",
+      "SOUL.md",
+      "IDENTITY.md",
+      "USER.md",
+      status.needsBootstrap ? BOOTSTRAP_FILE_NAME : null,
+      longTermMemoryFileName
+    ].filter((value): value is string => Boolean(value))
 
-  let remainingBudget = WORKSPACE_TOTAL_CHAR_LIMIT
-  const files: WorkspacePromptFile[] = []
+    let remainingBudget = WORKSPACE_TOTAL_CHAR_LIMIT
+    const files: WorkspacePromptFile[] = []
 
-  for (const relativeFilePath of candidateFiles) {
-    if (remainingBudget <= 0) {
-      break
+    for (const relativeFilePath of candidateFiles) {
+      if (remainingBudget <= 0) {
+        break
+      }
+
+      const absolutePath = resolve(workspaceDir, relativeFilePath)
+      const rawContent = await readTextFileIfExists(absolutePath)
+      if (rawContent === null) {
+        continue
+      }
+
+      const fileBudget = Math.min(WORKSPACE_FILE_CHAR_LIMIT, remainingBudget)
+      const truncatedContent = truncateWorkspaceContent(rawContent, fileBudget)
+      const injectedContent = truncatedContent.content || "(empty file)"
+
+      files.push({
+        path: relativeFilePath,
+        absolutePath,
+        content: injectedContent,
+        truncated: truncatedContent.truncated
+      })
+
+      remainingBudget -= injectedContent.length
     }
 
-    const absolutePath = resolve(workspaceDir, relativeFilePath)
-    const rawContent = await readTextFileIfExists(absolutePath)
-    if (rawContent === null) {
-      continue
+    return {
+      ...status,
+      files
     }
-
-    const fileBudget = Math.min(WORKSPACE_FILE_CHAR_LIMIT, remainingBudget)
-    const truncatedContent = truncateWorkspaceContent(rawContent, fileBudget)
-    const injectedContent = truncatedContent.content || "(empty file)"
-
-    files.push({
-      path: relativeFilePath,
-      absolutePath,
-      content: injectedContent,
-      truncated: truncatedContent.truncated
-    })
-
-    remainingBudget -= injectedContent.length
+  } catch (error) {
+    console.warn(
+      `[Workspace] Failed to load workspace prompt context, continuing without it: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+    return createEmptyWorkspacePromptContext(workspaceDir)
   }
+}
 
-  return {
-    ...status,
-    files
+export async function loadWorkspacePromptContextSafely(
+  context: string
+): Promise<WorkspacePromptContext | undefined> {
+  try {
+    return await loadWorkspacePromptContext()
+  } catch (error) {
+    console.warn(
+      `[Workspace] Failed to load workspace prompt context for ${context}: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+    return undefined
   }
 }
 
@@ -407,10 +450,20 @@ async function listMemoryFiles(): Promise<
     return files
   }
 
+  const memoryRootEntry = await lstat(memoryRoot)
+  if (!memoryRootEntry.isDirectory() || memoryRootEntry.isSymbolicLink()) {
+    return files
+  }
+
   const pendingDirectories = [memoryRoot]
   while (pendingDirectories.length > 0) {
     const currentDirectory = pendingDirectories.pop()
     if (!currentDirectory) {
+      continue
+    }
+
+    const currentDirectoryEntry = await lstat(currentDirectory)
+    if (!currentDirectoryEntry.isDirectory() || currentDirectoryEntry.isSymbolicLink()) {
       continue
     }
 
@@ -652,8 +705,7 @@ export async function writeWorkspaceTextFile(input: {
   if (input.operation === "write") {
     await writeFile(absolutePath, input.content, "utf8")
   } else {
-    const existingContent = (await readTextFileIfExists(absolutePath)) ?? ""
-    await writeFile(absolutePath, `${existingContent}${input.content}`, "utf8")
+    await appendFile(absolutePath, input.content, "utf8")
   }
 
   return {

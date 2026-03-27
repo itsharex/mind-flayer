@@ -4,8 +4,8 @@
  */
 
 import { randomUUID } from "node:crypto"
-import { existsSync, readdirSync } from "node:fs"
-import { access, mkdir, readdir, rm, writeFile } from "node:fs/promises"
+import { existsSync, lstatSync, readdirSync, realpathSync } from "node:fs"
+import { access, lstat, mkdir, readdir, realpath, rm, writeFile } from "node:fs/promises"
 import { join, resolve, sep } from "node:path"
 import { getLegacySandboxRoot, getSandboxRoot } from "../../workspace"
 
@@ -115,13 +115,60 @@ function findTimestampedSandboxPathsSync(baseDir: string, chatId: string): strin
   }
 }
 
+async function validateReusableSandboxPath(
+  baseDir: string,
+  sandboxPath: string,
+  chatId: string
+): Promise<string | null> {
+  try {
+    const sandboxEntry = await lstat(sandboxPath)
+    if (!sandboxEntry.isDirectory() || sandboxEntry.isSymbolicLink()) {
+      return null
+    }
+
+    const [realBaseDir, realSandboxPath] = await Promise.all([
+      realpath(baseDir),
+      realpath(sandboxPath)
+    ])
+    assertSandboxPathWithinBase(realBaseDir, realSandboxPath, chatId)
+    return realSandboxPath
+  } catch {
+    return null
+  }
+}
+
+function validateReusableSandboxPathSync(
+  baseDir: string,
+  sandboxPath: string,
+  chatId: string
+): string | null {
+  try {
+    const sandboxEntry = lstatSync(sandboxPath)
+    if (!sandboxEntry.isDirectory() || sandboxEntry.isSymbolicLink()) {
+      return null
+    }
+
+    const realBaseDir = realpathSync(baseDir)
+    const realSandboxPath = realpathSync(sandboxPath)
+    assertSandboxPathWithinBase(realBaseDir, realSandboxPath, chatId)
+    return realSandboxPath
+  } catch {
+    return null
+  }
+}
+
 async function findExistingPersistentSandboxPath(chatId: string): Promise<string | null> {
   const baseDirectories = [getSandboxRoot(), getLegacySandboxRoot()]
 
   for (const baseDir of baseDirectories) {
     const legacySandboxPath = resolveSandboxPath(baseDir, chatId)
-    if (await pathExists(legacySandboxPath)) {
-      return legacySandboxPath
+    const reusableLegacySandboxPath = await validateReusableSandboxPath(
+      baseDir,
+      legacySandboxPath,
+      chatId
+    )
+    if (reusableLegacySandboxPath) {
+      return reusableLegacySandboxPath
     }
 
     const timestampedPaths = await findTimestampedSandboxPaths(baseDir, chatId)
@@ -277,8 +324,11 @@ export function getSandboxPath(chatId: string): string {
 
   for (const baseDir of [getSandboxRoot(), getLegacySandboxRoot()]) {
     const legacySandboxPath = resolveSandboxPath(baseDir, chatId)
-    if (existsSync(legacySandboxPath)) {
-      return legacySandboxPath
+    const reusableLegacySandboxPath = existsSync(legacySandboxPath)
+      ? validateReusableSandboxPathSync(baseDir, legacySandboxPath, chatId)
+      : null
+    if (reusableLegacySandboxPath) {
+      return reusableLegacySandboxPath
     }
 
     const timestampedPaths = findTimestampedSandboxPathsSync(baseDir, chatId)

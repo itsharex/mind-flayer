@@ -37,12 +37,15 @@ describe("buildSystemPrompt", () => {
     expect(prompt).not.toContain("final section titled 'Attachments:'")
     expect(prompt).toContain("## Project Context")
     expect(prompt).toContain("Shared workspace root:")
+    expect(prompt).toContain("Shared workspace root: <workspace>")
     expect(prompt).toContain("<workspace_context>")
     expect(prompt).toContain('path="AGENTS.md"')
     expect(prompt).toContain('path="BOOTSTRAP.md"')
     expect(prompt).toContain("bootstrap_active: true")
     expect(prompt).toContain("- model: minimax/model-a")
     expect(prompt).not.toContain("- channel:")
+    expect(prompt).not.toContain('absolute_path="')
+    expect(prompt).not.toContain("/Users/test/Library/Application Support/Mind Flayer/workspace")
   })
 
   it("includes channel runtime context when channel mode is enabled", () => {

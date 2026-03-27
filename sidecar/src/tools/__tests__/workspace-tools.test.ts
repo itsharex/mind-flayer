@@ -57,7 +57,7 @@ describe("workspace tools", () => {
       })
     )
 
-    await execute(
+    const userWriteResult = await execute(
       {
         path: "USER.md",
         operation: "write",
@@ -65,6 +65,12 @@ describe("workspace tools", () => {
       },
       {} as never
     )
+
+    expect(userWriteResult).toEqual({
+      path: "USER.md",
+      operation: "write",
+      bytesWritten: Buffer.byteLength("name: didi", "utf8")
+    })
     await execute(
       {
         path: "BOOTSTRAP.md",

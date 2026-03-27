@@ -1,6 +1,6 @@
-import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises"
+import { access, mkdir, mkdtemp, readFile, realpath, rm, symlink } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { join, resolve, sep } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import {
   cleanupSandbox,
@@ -35,11 +35,14 @@ describe("sandbox manager", () => {
   it("should create a sandbox under the app support sandboxes directory", async () => {
     const chatId = "chat_abc-123"
     const sandboxPath = await ensureChatSandbox(chatId)
+    const escapedSeparator = sep.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    const escapedSandboxesRoot = resolve(testAppSupportDir, "sandboxes").replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    )
 
     expect(sandboxPath).toMatch(
-      new RegExp(
-        `${resolve(testAppSupportDir, "sandboxes").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/\\d{8}-\\d{6}__${chatId}$`
-      )
+      new RegExp(`${escapedSandboxesRoot}${escapedSeparator}\\d{8}-\\d{6}__${chatId}$`)
     )
     await expect(access(sandboxPath)).resolves.toBeUndefined()
 
@@ -81,7 +84,7 @@ describe("sandbox manager", () => {
     const transientSandbox = await ensureChatSandbox("")
     const persistentSandbox = await ensureChatSandbox("chat-stable")
 
-    expect(transientSandbox).toContain(`${resolve(testAppSupportDir, "sandboxes")}/temp-`)
+    expect(transientSandbox).toContain(`${resolve(testAppSupportDir, "sandboxes")}${sep}temp-`)
 
     await cleanupTransientSandboxes()
 
@@ -102,11 +105,30 @@ describe("sandbox manager", () => {
   it("should prefer an existing legacy workspace directory for compatibility", async () => {
     const legacySandbox = resolve(testAppSupportDir, "workspaces", "legacy-chat")
     await mkdir(legacySandbox, { recursive: true })
+    const canonicalLegacySandbox = await realpath(legacySandbox)
 
     const resolvedPath = await ensureChatSandbox("legacy-chat")
 
-    expect(resolvedPath).toBe(legacySandbox)
-    expect(getSandboxPath("legacy-chat")).toBe(legacySandbox)
+    expect(resolvedPath).toBe(canonicalLegacySandbox)
+    expect(getSandboxPath("legacy-chat")).toBe(canonicalLegacySandbox)
+  })
+
+  it("should ignore symlinked legacy sandbox directories", async () => {
+    if (process.platform === "win32") {
+      return
+    }
+
+    const externalSandbox = resolve(testAppSupportDir, "outside", "legacy-link")
+    const legacySandboxLink = resolve(testAppSupportDir, "workspaces", "legacy-link")
+    await mkdir(externalSandbox, { recursive: true })
+    await mkdir(resolve(testAppSupportDir, "workspaces"), { recursive: true })
+    await symlink(externalSandbox, legacySandboxLink, "dir")
+
+    const resolvedPath = await ensureChatSandbox("legacy-link")
+
+    expect(resolvedPath).not.toBe(legacySandboxLink)
+    expect(resolvedPath).toContain(`${resolve(testAppSupportDir, "sandboxes")}${sep}`)
+    expect(getSandboxPath("legacy-link")).toBe(resolvedPath)
   })
 
   it("should require app support directory environment variable", async () => {

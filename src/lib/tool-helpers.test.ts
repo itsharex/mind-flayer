@@ -33,7 +33,7 @@ const toolConstants = {
   }
 } as never
 
-describe("getToolInputMeta", () => {
+describe("getToolCallMeta", () => {
   it("shows a workspace-relative path for writeWorkspaceFile", () => {
     const part = {
       type: "tool-writeWorkspaceFile",
@@ -45,7 +45,6 @@ describe("getToolInputMeta", () => {
       },
       output: {
         path: "USER.md",
-        absolutePath: "/Users/didi/Library/Application Support/Mind Flayer/workspace/USER.md",
         operation: "write",
         bytesWritten: 12
       }
@@ -63,7 +62,17 @@ describe("getToolInputMeta", () => {
         query: "preferred language"
       },
       output: {
-        query: "preferred language"
+        query: "preferred language",
+        totalResults: 1,
+        results: [
+          {
+            path: "memory/2026-03-26.md",
+            startLine: 1,
+            endLine: 1,
+            snippet: "preferred language",
+            score: 42
+          }
+        ]
       }
     } as unknown as ToolUIPart
 

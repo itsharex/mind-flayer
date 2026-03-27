@@ -1,8 +1,8 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { getWorkspaceStatus, loadWorkspacePromptContext } from ".."
+import { getWorkspaceStatus, loadWorkspacePromptContext, searchMemory } from ".."
 
 const APP_SUPPORT_DIR_ENV_KEY = "MINDFLAYER_APP_SUPPORT_DIR"
 
@@ -109,5 +109,20 @@ describe("workspace helpers", () => {
     expect(agentsFile?.truncated).toBe(true)
     expect(agentsFile?.content).toContain("[Truncated to fit prompt budget]")
     expect(agentsFile?.content.length).toBeLessThanOrEqual(20_000)
+  })
+
+  it("ignores symlinked memory directories during memory search", async () => {
+    if (process.platform === "win32") {
+      return
+    }
+
+    const externalMemoryRoot = join(appSupportDir, "external-memory")
+    await mkdir(externalMemoryRoot, { recursive: true })
+    await writeFile(join(externalMemoryRoot, "2026-03-27.md"), "secret memory snippet", "utf8")
+    await symlink(externalMemoryRoot, join(appSupportDir, "workspace", "memory"), "dir")
+
+    const results = await searchMemory("secret")
+
+    expect(results).toEqual([])
   })
 })

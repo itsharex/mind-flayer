@@ -68,7 +68,6 @@ export type WriteWorkspaceFileInput = {
 
 export type WriteWorkspaceFileOutput = {
   path: string
-  absolutePath: string
   operation: "write" | "append" | "delete"
   bytesWritten: number
 }
@@ -85,6 +84,14 @@ export type MemorySearchInput = {
 
 export type MemorySearchOutput = {
   query: string
+  totalResults: number
+  results: Array<{
+    path: string
+    startLine: number
+    endLine: number
+    snippet: string
+    score: number
+  }>
 }
 
 export type ToolMemorySearch = ToolUIPart & {

@@ -115,11 +115,19 @@ export function useChatStorage() {
         // Clean up bash execution sandbox via sidecar
         try {
           const cleanupUrl = await getSidecarUrl("/api/cleanup-sandbox")
-          await fetch(cleanupUrl, {
+          const cleanupResponse = await fetch(cleanupUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ chatId })
           })
+          if (!cleanupResponse.ok) {
+            const errorDetails = (await cleanupResponse.text()).trim()
+            throw new Error(
+              `cleanup-sandbox failed for chat '${chatId}' with HTTP ${
+                cleanupResponse.status
+              }${errorDetails ? `: ${errorDetails}` : ""}`
+            )
+          }
         } catch (cleanupErr) {
           // Log but don't fail the deletion if sandbox cleanup fails
           console.warn("[ChatStorage] Failed to cleanup sandbox:", cleanupErr)

@@ -115,7 +115,7 @@ function buildWorkspacePromptSection(options: BuildSystemPromptOptions): string 
     workspaceContext.files.length > 0
       ? workspaceContext.files.map(file =>
           [
-            `<workspace_file path="${escapeXmlAttribute(file.path)}" absolute_path="${escapeXmlAttribute(file.absolutePath)}"${file.truncated ? ' truncated="true"' : ""}>`,
+            `<workspace_file path="${escapeXmlAttribute(file.path)}"${file.truncated ? ' truncated="true"' : ""}>`,
             file.content,
             "</workspace_file>"
           ].join("\n")
@@ -124,7 +124,7 @@ function buildWorkspacePromptSection(options: BuildSystemPromptOptions): string 
 
   return [
     "## Project Context",
-    `Shared workspace root: ${workspaceContext.workspaceDir}`,
+    "Shared workspace root: <workspace>",
     "- Treat injected workspace files as the source of truth for identity, behavior, and long-term context.",
     "- BOOTSTRAP.md is passive: if it is present below, follow it in this conversation and delete it with writeWorkspaceFile when onboarding is complete.",
     "- Use writeWorkspaceFile only for approved files inside the shared workspace.",

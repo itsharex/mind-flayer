@@ -221,7 +221,6 @@ fn write_workspace_file_if_missing(destination: &Path, contents: &[u8]) -> Resul
 
 fn install_bundled_workspace(app_support_dir: &str) -> Result<(), String> {
     let workspace_root = Path::new(app_support_dir).join(AGENT_WORKSPACE_DIR_NAME);
-    let workspace_previously_existed = workspace_root.exists();
     let memory_root = workspace_root.join(WORKSPACE_MEMORY_DIR_NAME);
     let state_path = workspace_root.join(WORKSPACE_STATE_FILE_NAME);
     let bootstrap_path = workspace_root.join(WORKSPACE_BOOTSTRAP_FILE_NAME);
@@ -257,9 +256,8 @@ fn install_bundled_workspace(app_support_dir: &str) -> Result<(), String> {
 
         if bootstrap_path.exists() {
             state.bootstrap_seeded_at = Some(seeded_at);
-        } else if workspace_previously_existed {
+        } else if state.setup_completed_at.is_some() {
             state.bootstrap_seeded_at = Some(seeded_at);
-            state.setup_completed_at.get_or_insert(seeded_at);
         } else if let Some(bootstrap_file) = BUNDLED_WORKSPACE_FILES
             .iter()
             .find(|file| file.relative_path == WORKSPACE_BOOTSTRAP_FILE_NAME)
@@ -1378,6 +1376,35 @@ mod tests {
 
         assert!(!workspace_root.join("BOOTSTRAP.md").exists());
         assert!(workspace_root.join("AGENTS.md").exists());
+
+        let _ = fs::remove_dir_all(app_support_dir);
+    }
+
+    #[test]
+    fn does_not_mark_partial_workspace_install_as_completed() {
+        let app_support_dir = create_temp_dir("mind-flayer-workspace-partial");
+        let workspace_root = app_support_dir.join(AGENT_WORKSPACE_DIR_NAME);
+
+        fs::create_dir_all(&workspace_root).expect("failed to create workspace root");
+        fs::write(workspace_root.join("USER.md"), "custom user content")
+            .expect("failed to seed USER.md");
+
+        install_bundled_workspace(
+            app_support_dir
+                .to_str()
+                .expect("temp dir should be valid utf-8"),
+        )
+        .expect("bundled workspace installation should succeed");
+
+        let state: WorkspaceState = serde_json::from_slice(
+            &fs::read(workspace_root.join(WORKSPACE_STATE_FILE_NAME))
+                .expect("workspace state should be readable"),
+        )
+        .expect("workspace state should be valid JSON");
+
+        assert!(workspace_root.join("BOOTSTRAP.md").exists());
+        assert!(state.bootstrap_seeded_at.is_some());
+        assert!(state.setup_completed_at.is_none());
 
         let _ = fs::remove_dir_all(app_support_dir);
     }

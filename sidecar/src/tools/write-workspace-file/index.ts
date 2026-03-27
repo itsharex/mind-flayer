@@ -76,7 +76,8 @@ Do not use this for sandboxes, skills, channels, or arbitrary file system paths.
 
     execute: async input => {
       try {
-        return await writeWorkspaceTextFile(input)
+        const { absolutePath: _absolutePath, ...result } = await writeWorkspaceTextFile(input)
+        return result
       } catch (error) {
         throw new Error(
           `Failed to update workspace file: ${error instanceof Error ? error.message : String(error)}`
