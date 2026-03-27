@@ -9,7 +9,10 @@
     "webSearch": "联网搜索",
     "bashExecution": "Bash 执行",
     "read": "读取文件",
-    "writeWorkspaceFile": "写入工作区文件",
+    "appendWorkspaceSection": "追加工作区章节",
+    "replaceWorkspaceSection": "替换工作区章节",
+    "appendDailyMemory": "追加每日记忆",
+    "deleteWorkspaceFile": "删除工作区文件",
     "memorySearch": "搜索记忆",
     "memoryGet": "读取记忆"
   },

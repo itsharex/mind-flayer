@@ -13,7 +13,10 @@
     "webSearch": "Web search",
     "bashExecution": "Bash exec",
     "read": "Read file",
-    "writeWorkspaceFile": "Write workspace file",
+    "appendWorkspaceSection": "Append workspace section",
+    "replaceWorkspaceSection": "Replace workspace section",
+    "appendDailyMemory": "Append daily memory",
+    "deleteWorkspaceFile": "Delete workspace file",
     "memorySearch": "Search memory",
     "memoryGet": "Read memory"
   },

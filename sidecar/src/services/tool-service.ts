@@ -44,9 +44,18 @@ export class ToolService {
     const tools: AllTools = {}
     const readToolPlugin = toolRegistry.get("read")
     tools.read = readToolPlugin.createInstance("") as AllTools["read"]
-    tools.writeWorkspaceFile = toolRegistry
-      .get("writeWorkspaceFile")
-      .createInstance("") as AllTools["writeWorkspaceFile"]
+    tools.appendWorkspaceSection = toolRegistry
+      .get("appendWorkspaceSection")
+      .createInstance("") as AllTools["appendWorkspaceSection"]
+    tools.replaceWorkspaceSection = toolRegistry
+      .get("replaceWorkspaceSection")
+      .createInstance("") as AllTools["replaceWorkspaceSection"]
+    tools.appendDailyMemory = toolRegistry
+      .get("appendDailyMemory")
+      .createInstance("") as AllTools["appendDailyMemory"]
+    tools.deleteWorkspaceFile = toolRegistry
+      .get("deleteWorkspaceFile")
+      .createInstance("") as AllTools["deleteWorkspaceFile"]
     tools.memorySearch = toolRegistry
       .get("memorySearch")
       .createInstance("") as AllTools["memorySearch"]

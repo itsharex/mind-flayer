@@ -60,21 +60,72 @@ export type ToolRead = ToolUIPart & {
   output?: ReadToolOutput
 }
 
-export type WriteWorkspaceFileInput = {
+export type AppendWorkspaceSectionInput = {
   path: string
-  operation: "write" | "append" | "delete"
-  content?: string
+  sectionTitle: string
+  content: string
 }
 
-export type WriteWorkspaceFileOutput = {
+export type AppendWorkspaceSectionOutput = {
   path: string
-  operation: "write" | "append" | "delete"
+  sectionTitle: string
   bytesWritten: number
+  createdFile: boolean
+  createdSection: boolean
 }
 
-export type ToolWriteWorkspaceFile = ToolUIPart & {
-  input?: WriteWorkspaceFileInput
-  output?: WriteWorkspaceFileOutput
+export type ToolAppendWorkspaceSection = ToolUIPart & {
+  input?: AppendWorkspaceSectionInput
+  output?: AppendWorkspaceSectionOutput
+}
+
+export type ReplaceWorkspaceSectionInput = {
+  path: string
+  sectionTitle: string
+  content: string
+}
+
+export type ReplaceWorkspaceSectionOutput = {
+  path: string
+  sectionTitle: string
+  bytesWritten: number
+  createdFile: boolean
+  createdSection: boolean
+}
+
+export type ToolReplaceWorkspaceSection = ToolUIPart & {
+  input?: ReplaceWorkspaceSectionInput
+  output?: ReplaceWorkspaceSectionOutput
+}
+
+export type AppendDailyMemoryInput = {
+  path: string
+  content: string
+}
+
+export type AppendDailyMemoryOutput = {
+  path: string
+  bytesWritten: number
+  createdFile: boolean
+}
+
+export type ToolAppendDailyMemory = ToolUIPart & {
+  input?: AppendDailyMemoryInput
+  output?: AppendDailyMemoryOutput
+}
+
+export type DeleteWorkspaceFileInput = {
+  path: string
+}
+
+export type DeleteWorkspaceFileOutput = {
+  path: string
+  deleted: boolean
+}
+
+export type ToolDeleteWorkspaceFile = ToolUIPart & {
+  input?: DeleteWorkspaceFileInput
+  output?: DeleteWorkspaceFileOutput
 }
 
 export type MemorySearchInput = {
@@ -137,9 +188,21 @@ export const isBashExecutionToolUIPart = (
 export const isReadToolUIPart = (tool: ToolUIPart | DynamicToolUIPart): tool is ToolRead =>
   tool.type === "tool-read"
 
-export const isWriteWorkspaceFileToolUIPart = (
+export const isAppendWorkspaceSectionToolUIPart = (
   tool: ToolUIPart | DynamicToolUIPart
-): tool is ToolWriteWorkspaceFile => tool.type === "tool-writeWorkspaceFile"
+): tool is ToolAppendWorkspaceSection => tool.type === "tool-appendWorkspaceSection"
+
+export const isReplaceWorkspaceSectionToolUIPart = (
+  tool: ToolUIPart | DynamicToolUIPart
+): tool is ToolReplaceWorkspaceSection => tool.type === "tool-replaceWorkspaceSection"
+
+export const isAppendDailyMemoryToolUIPart = (
+  tool: ToolUIPart | DynamicToolUIPart
+): tool is ToolAppendDailyMemory => tool.type === "tool-appendDailyMemory"
+
+export const isDeleteWorkspaceFileToolUIPart = (
+  tool: ToolUIPart | DynamicToolUIPart
+): tool is ToolDeleteWorkspaceFile => tool.type === "tool-deleteWorkspaceFile"
 
 export const isMemorySearchToolUIPart = (
   tool: ToolUIPart | DynamicToolUIPart
@@ -191,7 +254,21 @@ export function getToolCallMeta(
           : toolConstants.read.input(tool.input.filePath)
     }
   }
-  if (isWriteWorkspaceFileToolUIPart(tool)) {
+  if (isAppendWorkspaceSectionToolUIPart(tool)) {
+    const targetPath = getWorkspaceRelativePath(tool.output?.path || tool.input?.path)
+    const targetSection = tool.output?.sectionTitle || tool.input?.sectionTitle || ""
+    return {
+      content: targetSection ? `${targetPath}: ${targetSection}` : targetPath
+    }
+  }
+  if (isReplaceWorkspaceSectionToolUIPart(tool)) {
+    const targetPath = getWorkspaceRelativePath(tool.output?.path || tool.input?.path)
+    const targetSection = tool.output?.sectionTitle || tool.input?.sectionTitle || ""
+    return {
+      content: targetSection ? `${targetPath}: ${targetSection}` : targetPath
+    }
+  }
+  if (isAppendDailyMemoryToolUIPart(tool) || isDeleteWorkspaceFileToolUIPart(tool)) {
     return {
       content: getWorkspaceRelativePath(tool.output?.path || tool.input?.path)
     }

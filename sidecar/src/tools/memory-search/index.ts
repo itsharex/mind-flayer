@@ -16,8 +16,8 @@ export const memorySearchTool = () =>
     description: `Search the global agent memory files with simple text matching.
 
 Searches:
-- MEMORY.md, or memory.md only when MEMORY.md is absent
-- Daily notes under memory/**/*.md
+- MEMORY.md
+- Daily notes under memory/YYYY-MM-DD.md (append-only chronological logs)
 
 Use this when you need to recall past context without loading all memory files into the prompt.`,
 

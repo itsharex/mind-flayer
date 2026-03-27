@@ -17,8 +17,7 @@ export const memoryGetTool = () =>
 
 Allowed targets:
 - MEMORY.md
-- memory.md
-- Files under memory/**/*.md
+- Daily notes under memory/YYYY-MM-DD.md (append-only chronological logs)
 
 If the file does not exist, this tool returns empty content instead of throwing.`,
 

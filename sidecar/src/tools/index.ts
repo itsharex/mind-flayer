@@ -1,10 +1,16 @@
+import { AppendDailyMemoryTool, appendDailyMemoryTool } from "./append-daily-memory"
+import { AppendWorkspaceSectionTool, appendWorkspaceSectionTool } from "./append-workspace-section"
 import { BashExecutionTool, bashExecutionTool } from "./bash-exec"
+import { DeleteWorkspaceFileTool, deleteWorkspaceFileTool } from "./delete-workspace-file"
 import { MemoryGetTool, memoryGetTool } from "./memory-get"
 import { MemorySearchTool, memorySearchTool } from "./memory-search"
 import { ReadTool, readTool } from "./read"
 import { ToolRegistry } from "./registry"
+import {
+  ReplaceWorkspaceSectionTool,
+  replaceWorkspaceSectionTool
+} from "./replace-workspace-section"
 import { WebSearchTool, webSearchTool } from "./web-search"
-import { WriteWorkspaceFileTool, writeWorkspaceFileTool } from "./write-workspace-file"
 
 /**
  * Global tool registry instance.
@@ -16,7 +22,10 @@ export const toolRegistry = new ToolRegistry()
 toolRegistry.register(new WebSearchTool())
 toolRegistry.register(new BashExecutionTool())
 toolRegistry.register(new ReadTool())
-toolRegistry.register(new WriteWorkspaceFileTool())
+toolRegistry.register(new AppendWorkspaceSectionTool())
+toolRegistry.register(new ReplaceWorkspaceSectionTool())
+toolRegistry.register(new AppendDailyMemoryTool())
+toolRegistry.register(new DeleteWorkspaceFileTool())
 toolRegistry.register(new MemorySearchTool())
 toolRegistry.register(new MemoryGetTool())
 
@@ -26,20 +35,26 @@ export { ToolRegistry } from "./registry"
 
 // Keep exporting tool factories for backward compatibility during refactoring
 export {
+  appendDailyMemoryTool,
+  appendWorkspaceSectionTool,
   bashExecutionTool,
+  deleteWorkspaceFileTool,
   memoryGetTool,
   memorySearchTool,
   readTool,
-  webSearchTool,
-  writeWorkspaceFileTool
+  replaceWorkspaceSectionTool,
+  webSearchTool
 }
 
 // Type for all available tools (used by AI SDK)
 export type AllTools = {
+  appendWorkspaceSection?: ReturnType<typeof appendWorkspaceSectionTool>
+  replaceWorkspaceSection?: ReturnType<typeof replaceWorkspaceSectionTool>
+  appendDailyMemory?: ReturnType<typeof appendDailyMemoryTool>
+  deleteWorkspaceFile?: ReturnType<typeof deleteWorkspaceFileTool>
   webSearch?: ReturnType<typeof webSearchTool>
   bashExecution?: ReturnType<typeof bashExecutionTool>
   read?: ReturnType<typeof readTool>
-  writeWorkspaceFile?: ReturnType<typeof writeWorkspaceFileTool>
   memorySearch?: ReturnType<typeof memorySearchTool>
   memoryGet?: ReturnType<typeof memoryGetTool>
 }

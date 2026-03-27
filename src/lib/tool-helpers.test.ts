@@ -34,23 +34,82 @@ const toolConstants = {
 } as never
 
 describe("getToolCallMeta", () => {
-  it("shows a workspace-relative path for writeWorkspaceFile", () => {
+  it("shows the path and section for appendWorkspaceSection", () => {
     const part = {
-      type: "tool-writeWorkspaceFile",
+      type: "tool-appendWorkspaceSection",
       toolCallId: "tool-1",
       state: "output-available",
       input: {
-        path: "/Users/didi/Library/Application Support/Mind Flayer/workspace/USER.md",
-        operation: "write"
+        path: "/Users/USERNAME/Library/Application Support/Mind Flayer/workspace/IDENTITY.md",
+        sectionTitle: "Vibe",
+        content: "- Calm and practical"
       },
       output: {
-        path: "USER.md",
-        operation: "write",
-        bytesWritten: 12
+        path: "IDENTITY.md",
+        sectionTitle: "Vibe",
+        bytesWritten: 20,
+        createdFile: false,
+        createdSection: false
       }
     } as unknown as ToolUIPart
 
-    expect(getToolCallMeta(part, toolConstants)?.content).toBe("USER.md")
+    expect(getToolCallMeta(part, toolConstants)?.content).toBe("IDENTITY.md: Vibe")
+  })
+
+  it("shows the path and section for replaceWorkspaceSection", () => {
+    const part = {
+      type: "tool-replaceWorkspaceSection",
+      toolCallId: "tool-4",
+      state: "output-available",
+      input: {
+        path: "USER.md",
+        sectionTitle: "Preferences",
+        content: "- Preferred language: Chinese"
+      },
+      output: {
+        path: "USER.md",
+        sectionTitle: "Preferences",
+        bytesWritten: 30
+      }
+    } as unknown as ToolUIPart
+
+    expect(getToolCallMeta(part, toolConstants)?.content).toBe("USER.md: Preferences")
+  })
+
+  it("shows the path for appendDailyMemory", () => {
+    const part = {
+      type: "tool-appendDailyMemory",
+      toolCallId: "tool-5",
+      state: "output-available",
+      input: {
+        path: "memory/2026-03-26.md",
+        content: "- 10:30 Fact: preferred language is Chinese"
+      },
+      output: {
+        path: "memory/2026-03-26.md",
+        bytesWritten: 43,
+        createdFile: false
+      }
+    } as unknown as ToolUIPart
+
+    expect(getToolCallMeta(part, toolConstants)?.content).toBe("memory/2026-03-26.md")
+  })
+
+  it("shows the path for deleteWorkspaceFile", () => {
+    const part = {
+      type: "tool-deleteWorkspaceFile",
+      toolCallId: "tool-6",
+      state: "output-available",
+      input: {
+        path: "BOOTSTRAP.md"
+      },
+      output: {
+        path: "BOOTSTRAP.md",
+        deleted: true
+      }
+    } as unknown as ToolUIPart
+
+    expect(getToolCallMeta(part, toolConstants)?.content).toBe("BOOTSTRAP.md")
   })
 
   it("shows the query for memorySearch", () => {
@@ -85,12 +144,12 @@ describe("getToolCallMeta", () => {
       toolCallId: "tool-3",
       state: "output-available",
       input: {
-        path: "file:///Users/didi/Library/Application%20Support/Mind%20Flayer/workspace/memory/2026-03-26.md"
+        path: "file:///Users/USERNAME/Library/Application%20Support/Mind%20Flayer/workspace/memory/2026-03-26.md"
       },
       output: {
         path: "memory/2026-03-26.md",
         absolutePath:
-          "/Users/didi/Library/Application Support/Mind Flayer/workspace/memory/2026-03-26.md",
+          "/Users/USERNAME/Library/Application Support/Mind Flayer/workspace/memory/2026-03-26.md",
         exists: true,
         content: "User prefers concise replies.",
         startLine: 1,

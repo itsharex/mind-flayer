@@ -5,6 +5,7 @@ import {
   LibraryBigIcon,
   NotebookPenIcon,
   TerminalIcon,
+  Trash2Icon,
   WrenchIcon
 } from "lucide-react"
 
@@ -18,8 +19,12 @@ export function getToolIcon(toolName: string, className: string) {
       return <BookOpenTextIcon className={className} />
     case "skillread":
       return <LibraryBigIcon className={className} />
-    case "writeworkspacefile":
+    case "appendworkspacesection":
+    case "replaceworkspacesection":
+    case "appenddailymemory":
       return <NotebookPenIcon className={className} />
+    case "deleteworkspacefile":
+      return <Trash2Icon className={className} />
     case "memorysearch":
     case "memoryget":
       return <BookSearchIcon className={className} />

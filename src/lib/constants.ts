@@ -16,7 +16,10 @@ export function useToolConstants() {
         webSearch: t("names.webSearch"),
         bashExecution: t("names.bashExecution"),
         read: t("names.read"),
-        writeWorkspaceFile: t("names.writeWorkspaceFile"),
+        appendWorkspaceSection: t("names.appendWorkspaceSection"),
+        replaceWorkspaceSection: t("names.replaceWorkspaceSection"),
+        appendDailyMemory: t("names.appendDailyMemory"),
+        deleteWorkspaceFile: t("names.deleteWorkspaceFile"),
         memorySearch: t("names.memorySearch"),
         memoryGet: t("names.memoryGet")
       },

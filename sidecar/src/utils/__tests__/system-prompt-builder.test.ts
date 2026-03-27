@@ -6,20 +6,21 @@ describe("buildSystemPrompt", () => {
     modelProvider: "minimax",
     modelId: "model-a",
     workspaceContext: {
-      workspaceDir: "/Users/test/Library/Application Support/Mind Flayer/workspace",
+      workspaceDir: "/Users/USERNAME/Library/Application Support/Mind Flayer/workspace",
       needsBootstrap: true,
       setupCompletedAt: null,
       files: [
         {
           path: "AGENTS.md",
-          absolutePath: "/Users/test/Library/Application Support/Mind Flayer/workspace/AGENTS.md",
+          absolutePath:
+            "/Users/USERNAME/Library/Application Support/Mind Flayer/workspace/AGENTS.md",
           content: "Follow BOOTSTRAP.md when it exists.",
           truncated: false
         },
         {
           path: "BOOTSTRAP.md",
           absolutePath:
-            "/Users/test/Library/Application Support/Mind Flayer/workspace/BOOTSTRAP.md",
+            "/Users/USERNAME/Library/Application Support/Mind Flayer/workspace/BOOTSTRAP.md",
           content: "Ask who you are and delete this file when complete.",
           truncated: false
         }
@@ -42,10 +43,18 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain('path="AGENTS.md"')
     expect(prompt).toContain('path="BOOTSTRAP.md"')
     expect(prompt).toContain("bootstrap_active: true")
+    expect(prompt).toContain("Use appendWorkspaceSection to add facts to USER.md")
+    expect(prompt).toContain("Use replaceWorkspaceSection only when you intentionally want")
+    expect(prompt).toContain("MEMORY.md is structured long-term memory")
+    expect(prompt).toContain("appendDailyMemory")
+    expect(prompt).toContain("Use deleteWorkspaceFile only for BOOTSTRAP.md")
+    expect(prompt).toContain("AGENTS.md is immutable")
     expect(prompt).toContain("- model: minimax/model-a")
     expect(prompt).not.toContain("- channel:")
     expect(prompt).not.toContain('absolute_path="')
-    expect(prompt).not.toContain("/Users/test/Library/Application Support/Mind Flayer/workspace")
+    expect(prompt).not.toContain(
+      "/Users/USERNAME/Library/Application Support/Mind Flayer/workspace"
+    )
   })
 
   it("includes channel runtime context when channel mode is enabled", () => {

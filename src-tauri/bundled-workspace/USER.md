@@ -1,6 +1,8 @@
 # USER.md - About Your Human
 
-_Learn about the person you're helping. Update this as you go._
+_Learn about the person you're helping. Keep stable metadata easy to scan, and update this as you go._
+
+## Identity
 
 - **Name:**
 - **What to call them:**
@@ -8,10 +10,10 @@ _Learn about the person you're helping. Update this as you go._
 - **Timezone:**
 - **Notes:**
 
+## Preferences
+
+_Record interaction preferences here: communication style, formatting preferences, likes, dislikes, and recurring requests._
+
 ## Context
 
-_(What do they care about? What projects are they working on? What annoys them? What makes them laugh? Build this over time.)_
-
----
-
-The more you know, the better you can help. But remember — you're learning about a person, not building a dossier. Respect the difference.
+_Record current context here: ongoing work, relevant background, active constraints, and what matters right now._

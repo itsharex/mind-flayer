@@ -35,7 +35,7 @@ const ThinkingPlainTextCode = memo(
       return (
         <code
           className={cn(
-            "block whitespace-pre-wrap wrap-break-word text-inherit [font-family:inherit]",
+            "block whitespace-pre-wrap wrap-break-word text-inherit font-[inherit]",
             className
           )}
           data-streamdown="thinking-plain-text-block"

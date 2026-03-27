@@ -6,7 +6,7 @@ import { getWorkspaceStatus, loadWorkspacePromptContext, searchMemory } from "..
 
 const APP_SUPPORT_DIR_ENV_KEY = "MINDFLAYER_APP_SUPPORT_DIR"
 
-async function writeWorkspaceFile(
+async function seedWorkspaceFile(
   appSupportDir: string,
   relativePath: string,
   content: string
@@ -37,14 +37,14 @@ describe("workspace helpers", () => {
     }
   })
 
-  it("loads workspace prompt files in the expected order and prefers MEMORY.md", async () => {
+  it("loads workspace prompt files in the expected order with MEMORY.md", async () => {
     await Promise.all([
-      writeWorkspaceFile(appSupportDir, "AGENTS.md", "agents"),
-      writeWorkspaceFile(appSupportDir, "SOUL.md", "soul"),
-      writeWorkspaceFile(appSupportDir, "IDENTITY.md", "identity"),
-      writeWorkspaceFile(appSupportDir, "USER.md", "user"),
-      writeWorkspaceFile(appSupportDir, "BOOTSTRAP.md", "bootstrap"),
-      writeWorkspaceFile(appSupportDir, "MEMORY.md", "canonical-memory")
+      seedWorkspaceFile(appSupportDir, "AGENTS.md", "agents"),
+      seedWorkspaceFile(appSupportDir, "SOUL.md", "soul"),
+      seedWorkspaceFile(appSupportDir, "IDENTITY.md", "identity"),
+      seedWorkspaceFile(appSupportDir, "USER.md", "user"),
+      seedWorkspaceFile(appSupportDir, "BOOTSTRAP.md", "bootstrap"),
+      seedWorkspaceFile(appSupportDir, "MEMORY.md", "canonical-memory")
     ])
 
     const promptContext = await loadWorkspacePromptContext()
@@ -61,14 +61,14 @@ describe("workspace helpers", () => {
     expect(promptContext.files.at(-1)?.content).toContain("canonical-memory")
   })
 
-  it("falls back to memory.md and omits BOOTSTRAP.md when onboarding is complete", async () => {
+  it("omits BOOTSTRAP.md when onboarding is complete", async () => {
     await Promise.all([
-      writeWorkspaceFile(appSupportDir, "AGENTS.md", "agents"),
-      writeWorkspaceFile(appSupportDir, "SOUL.md", "soul"),
-      writeWorkspaceFile(appSupportDir, "IDENTITY.md", "identity"),
-      writeWorkspaceFile(appSupportDir, "USER.md", "user"),
-      writeWorkspaceFile(appSupportDir, "memory.md", "legacy-memory"),
-      writeWorkspaceFile(
+      seedWorkspaceFile(appSupportDir, "AGENTS.md", "agents"),
+      seedWorkspaceFile(appSupportDir, "SOUL.md", "soul"),
+      seedWorkspaceFile(appSupportDir, "IDENTITY.md", "identity"),
+      seedWorkspaceFile(appSupportDir, "USER.md", "user"),
+      seedWorkspaceFile(appSupportDir, "MEMORY.md", "canonical-memory"),
+      seedWorkspaceFile(
         appSupportDir,
         "state.json",
         JSON.stringify({
@@ -88,7 +88,7 @@ describe("workspace helpers", () => {
       "SOUL.md",
       "IDENTITY.md",
       "USER.md",
-      "memory.md"
+      "MEMORY.md"
     ])
     expect(status).toMatchObject({
       needsBootstrap: false,
@@ -98,8 +98,8 @@ describe("workspace helpers", () => {
 
   it("truncates oversized prompt files to fit the workspace prompt budget", async () => {
     await Promise.all([
-      writeWorkspaceFile(appSupportDir, "AGENTS.md", "a".repeat(25_000)),
-      writeWorkspaceFile(appSupportDir, "SOUL.md", "soul")
+      seedWorkspaceFile(appSupportDir, "AGENTS.md", "a".repeat(25_000)),
+      seedWorkspaceFile(appSupportDir, "SOUL.md", "soul")
     ])
 
     const promptContext = await loadWorkspacePromptContext()
@@ -124,5 +124,19 @@ describe("workspace helpers", () => {
     const results = await searchMemory("secret")
 
     expect(results).toEqual([])
+  })
+
+  it("ignores non-daily markdown files under memory/ during memory search", async () => {
+    await Promise.all([
+      seedWorkspaceFile(appSupportDir, "MEMORY.md", "release plan"),
+      seedWorkspaceFile(appSupportDir, "memory/notes.md", "release plan"),
+      seedWorkspaceFile(appSupportDir, "memory/2026-03-27.md", "daily release plan")
+    ])
+
+    const results = await searchMemory("release")
+
+    expect(results.some(result => result.path === "memory/notes.md")).toBe(false)
+    expect(results.some(result => result.path === "memory/2026-03-27.md")).toBe(true)
+    expect(results.some(result => result.path === "MEMORY.md")).toBe(true)
   })
 })
