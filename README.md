@@ -6,6 +6,8 @@
 
 <p align="center">A powerful desktop AI assistant app built with Tauri, React, Vercel AI SDK and more!</p>
 
+<p align="center">Models · Memory · Tools · Skills · Channels</p>
+
 <br>
 
 <div align="center">
@@ -38,13 +40,19 @@
 ## Screenshots
 
 <p align="center">
-  <img height="500" alt="App Screenshot 1" src="preview/img-1.png" />
+  <img height="500" alt="Desktop App Screenshot" src="preview/img-2.png" />
   <br>
   <em>Desktop App</em>
 </p>
 
 <p align="center">
-  <img height="500" alt="App Screenshot 2" src="preview/telegram-bot.png" />
+  <img height="500" alt="App Settings Screenshot" src="preview/img-3.png" />
+  <br>
+  <em>App Settings</em>
+</p>
+
+<p align="center">
+  <img height="500" alt="Telegram Bot Integration Screenshot" src="preview/telegram-bot.png" />
   <br>
   <em>Telegram Bot Integration</em>
 </p>

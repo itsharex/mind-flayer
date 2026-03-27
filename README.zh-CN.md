@@ -6,6 +6,8 @@
 
 <p align="center">一个优雅简洁的桌面 AI 助手应用，基于 Tauri、React、Vercel AI SDK 等技术构建！</p>
 
+<p align="center">模型 · 记忆 · 工具 · 技能 · 渠道</p>
+
 <br>
 
 <div align="center">
@@ -38,13 +40,19 @@
 ## 截图
 
 <p align="center">
-  <img height="500" alt="应用截图 1" src="preview/img-1.png" />
+  <img height="500" alt="桌面端 App 截图" src="preview/img-2.png" />
   <br>
   <em>桌面端 App</em>
 </p>
 
 <p align="center">
-  <img height="500" alt="应用截图 2" src="preview/telegram-bot.png" />
+  <img height="500" alt="应用设置截图" src="preview/img-3.png" />
+  <br>
+  <em>应用设置</em>
+</p>
+
+<p align="center">
+  <img height="500" alt="Telegram Bot 集成截图" src="preview/telegram-bot.png" />
   <br>
   <em>集成到 Telegram Bot</em>
 </p>
