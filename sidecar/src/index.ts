@@ -9,7 +9,7 @@ import { providerService } from "./services/provider-service"
 import { TelegramBotService } from "./services/telegram-bot-service"
 import { createTelegramSessionStoreFromEnv } from "./services/telegram-session-store"
 import { toolService } from "./services/tool-service"
-import { cleanupTransientWorkspaces } from "./tools/bash-exec/workspace"
+import { cleanupTransientSandboxes } from "./tools/bash-exec/sandbox"
 import type { ConfigUpdateMessage } from "./type"
 import { createShutdownHandler, setupStdinListener } from "./utils/lifecycle"
 
@@ -106,7 +106,7 @@ async function main() {
   // Register shutdown handlers
   const shutdown = createShutdownHandler(globalAbortController, server, async () => {
     await telegramBotService.stop()
-    await cleanupTransientWorkspaces()
+    await cleanupTransientSandboxes()
   })
   process.on("SIGTERM", shutdown)
   process.on("SIGINT", shutdown)

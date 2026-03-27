@@ -42,11 +42,23 @@ describe("ToolService", () => {
   })
 
   describe("getRequestTools", () => {
-    it("should always return read tool and return bash execution when web search is disabled", () => {
+    it("should always return core workspace tools and bash execution when web search is disabled", () => {
       const tools = service.getRequestTools({ useWebSearch: false })
 
       expect(tools).toHaveProperty("read")
       expect(tools.read).toBeDefined()
+      expect(tools).toHaveProperty("appendWorkspaceSection")
+      expect(tools.appendWorkspaceSection).toBeDefined()
+      expect(tools).toHaveProperty("replaceWorkspaceSection")
+      expect(tools.replaceWorkspaceSection).toBeDefined()
+      expect(tools).toHaveProperty("appendDailyMemory")
+      expect(tools.appendDailyMemory).toBeDefined()
+      expect(tools).toHaveProperty("deleteWorkspaceFile")
+      expect(tools.deleteWorkspaceFile).toBeDefined()
+      expect(tools).toHaveProperty("memorySearch")
+      expect(tools.memorySearch).toBeDefined()
+      expect(tools).toHaveProperty("memoryGet")
+      expect(tools.memoryGet).toBeDefined()
       expect(tools).toHaveProperty("bashExecution")
       expect(tools.bashExecution).toBeDefined()
     })
@@ -60,6 +72,12 @@ describe("ToolService", () => {
       expect(tools.webSearch).toBeDefined()
       expect(tools).toHaveProperty("read")
       expect(tools.read).toBeDefined()
+      expect(tools).toHaveProperty("appendWorkspaceSection")
+      expect(tools).toHaveProperty("replaceWorkspaceSection")
+      expect(tools).toHaveProperty("appendDailyMemory")
+      expect(tools).toHaveProperty("deleteWorkspaceFile")
+      expect(tools).toHaveProperty("memorySearch")
+      expect(tools).toHaveProperty("memoryGet")
     })
 
     it("should initialize web search when requested but not available", () => {
@@ -71,6 +89,12 @@ describe("ToolService", () => {
       expect(tools.webSearch).toBeDefined()
       expect(tools).toHaveProperty("read")
       expect(tools.read).toBeDefined()
+      expect(tools).toHaveProperty("appendWorkspaceSection")
+      expect(tools).toHaveProperty("replaceWorkspaceSection")
+      expect(tools).toHaveProperty("appendDailyMemory")
+      expect(tools).toHaveProperty("deleteWorkspaceFile")
+      expect(tools).toHaveProperty("memorySearch")
+      expect(tools).toHaveProperty("memoryGet")
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining(
           "Web search requested but instance not available; initializing with empty API key"

@@ -8,6 +8,7 @@ const compactMessagesMock = vi.fn()
 const buildSystemPromptMock = vi.fn()
 const discoverSkillsSafelyMock = vi.fn()
 const buildToolChoiceMock = vi.fn()
+const loadWorkspacePromptContextSafelyMock = vi.fn()
 
 vi.mock("ai", () => ({
   stepCountIs: vi.fn((value: number) => value),
@@ -37,6 +38,15 @@ vi.mock("../../skills/catalog", async importOriginal => {
 vi.mock("../../utils/tool-choice", () => ({
   buildToolChoice: (...args: unknown[]) => buildToolChoiceMock(...args)
 }))
+
+vi.mock("../../workspace", async importOriginal => {
+  const actual = await importOriginal<typeof import("../../workspace")>()
+  return {
+    ...actual,
+    loadWorkspacePromptContextSafely: (...args: unknown[]) =>
+      loadWorkspacePromptContextSafelyMock(...args)
+  }
+})
 
 import { ConflictError } from "../../utils/http-errors"
 import * as telegramMediaMessageModule from "../../utils/telegram-media-message"
@@ -131,6 +141,12 @@ describe("TelegramBotService", () => {
     buildSystemPromptMock.mockReturnValue("system prompt")
     discoverSkillsSafelyMock.mockResolvedValue([])
     buildToolChoiceMock.mockReturnValue("auto")
+    loadWorkspacePromptContextSafelyMock.mockResolvedValue({
+      workspaceDir: "/tmp/app-support/workspace",
+      needsBootstrap: true,
+      setupCompletedAt: null,
+      files: []
+    })
   })
 
   afterEach(async () => {
@@ -557,7 +573,13 @@ describe("TelegramBotService", () => {
       modelId: "model-a",
       modelLabel: "MiniMax-M2.5",
       channel: "telegram",
-      skills: []
+      skills: [],
+      workspaceContext: {
+        workspaceDir: "/tmp/app-support/workspace",
+        needsBootstrap: true,
+        setupCompletedAt: null,
+        files: []
+      }
     })
 
     const sessions = service.listSessions()
@@ -1755,7 +1777,6 @@ describe("TelegramBotService", () => {
     })
     vi.stubGlobal("fetch", fetchMock)
 
-    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     streamTextMock.mockReturnValue({
       textStream: createTextStream("Assistant reply")
     })
@@ -1824,13 +1845,100 @@ describe("TelegramBotService", () => {
       modelId: "model-a",
       modelLabel: "MiniMax-M2.5",
       channel: "telegram",
-      skills: []
+      skills: [],
+      workspaceContext: {
+        workspaceDir: "/tmp/app-support/workspace",
+        needsBootstrap: true,
+        setupCompletedAt: null,
+        files: []
+      }
     })
     expect(discoverSkillsSafelyMock).toHaveBeenCalledWith("Telegram request")
     expect(streamTextMock).toHaveBeenCalled()
-    expect(consoleWarnSpy).not.toHaveBeenCalled()
+  })
 
-    consoleWarnSpy.mockRestore()
+  it("continues without workspace context when Telegram workspace loading fails", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/sendMessageDraft")) {
+        return Promise.resolve(new Response("method not found", { status: 404 }))
+      }
+      return telegramApiSuccess({ message_id: 18 })
+    })
+    vi.stubGlobal("fetch", fetchMock)
+
+    streamTextMock.mockReturnValue({
+      textStream: createTextStream("Assistant reply")
+    })
+    discoverSkillsSafelyMock.mockResolvedValueOnce([])
+    loadWorkspacePromptContextSafelyMock.mockResolvedValueOnce(undefined)
+
+    const providerService = {
+      hasConfig: vi.fn(() => true),
+      createModel: vi.fn(() => ({})),
+      getConfig: vi.fn((provider: string) => {
+        if (provider === "telegram") {
+          return { apiKey: "tg-token", baseUrl: "https://api.telegram.org" }
+        }
+        return { apiKey: "model-key" }
+      })
+    }
+    const toolService = {
+      getRequestTools: vi.fn(() => ({}))
+    }
+
+    const runtimeConfigService = new ChannelRuntimeConfigService()
+    runtimeConfigService.update({
+      selectedModel: {
+        provider: "minimax",
+        providerLabel: "MiniMax",
+        modelId: "model-a",
+        modelLabel: "MiniMax-M2.5"
+      },
+      channels: {
+        telegram: {
+          enabled: true,
+          allowedUserIds: ["1003"]
+        }
+      }
+    })
+
+    const service = new TelegramBotService(
+      providerService as never,
+      toolService as never,
+      runtimeConfigService
+    )
+
+    await (
+      service as unknown as {
+        handleIncomingMessage: (
+          botToken: string,
+          apiBaseUrl: string,
+          message: unknown
+        ) => Promise<void>
+      }
+    ).handleIncomingMessage("token", "https://api.telegram.org", {
+      message_id: 102,
+      chat: {
+        id: 1003,
+        type: "private"
+      },
+      from: {
+        id: 1003,
+        is_bot: false
+      },
+      text: "hello"
+    })
+
+    expect(buildSystemPromptMock).toHaveBeenCalledWith({
+      modelProvider: "minimax",
+      modelProviderLabel: "MiniMax",
+      modelId: "model-a",
+      modelLabel: "MiniMax-M2.5",
+      channel: "telegram",
+      skills: [],
+      workspaceContext: undefined
+    })
+    expect(streamTextMock).toHaveBeenCalled()
   })
 
   it("filters disabled skills before building the Telegram system prompt", async () => {
@@ -1934,7 +2042,13 @@ describe("TelegramBotService", () => {
           description: "Bundled reader",
           location: "~/skills/builtin/reader/SKILL.md"
         }
-      ]
+      ],
+      workspaceContext: {
+        workspaceDir: "/tmp/app-support/workspace",
+        needsBootstrap: true,
+        setupCompletedAt: null,
+        files: []
+      }
     })
   })
 

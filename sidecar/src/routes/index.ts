@@ -14,12 +14,13 @@ import {
   handleTelegramWhitelistRequests
 } from "./channel-telegram-whitelist-requests"
 import { handleChat } from "./chat"
-import { handleCleanupWorkspace } from "./cleanup"
+import { handleCleanupSandbox, handleCleanupWorkspace } from "./cleanup"
 import { handleHealth } from "./health"
 import { handleLocalImage } from "./local-image"
 import { handleRemoteImage } from "./remote-image"
 import { handleDeleteSkill, handleGetSkillDetail, handleListSkills } from "./skills"
 import { handleTitleGenerator } from "./title"
+import { handleWorkspaceStatus } from "./workspace-status"
 
 /**
  * Register all application routes.
@@ -47,8 +48,12 @@ export function registerRoutes(
   app.get("/api/local-image", handleLocalImage)
   app.get("/api/remote-image", handleRemoteImage)
 
-  // Workspace cleanup endpoint
+  // Sandbox cleanup endpoints
+  app.post("/api/cleanup-sandbox", handleCleanupSandbox)
   app.post("/api/cleanup-workspace", handleCleanupWorkspace)
+
+  // Global workspace status endpoint
+  app.get("/api/workspace/status", handleWorkspaceStatus)
 
   // Skills management endpoints
   app.get("/api/skills", handleListSkills)

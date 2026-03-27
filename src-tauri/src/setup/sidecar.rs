@@ -1,4 +1,5 @@
 use log::{debug, error, info, warn};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     fs,
@@ -26,6 +27,11 @@ const MINDFLAYER_APP_SUPPORT_DIR_ENV_KEY: &str = "MINDFLAYER_APP_SUPPORT_DIR";
 const GLOBAL_SKILLS_DIR_NAME: &str = "skills";
 const BUNDLED_SKILLS_DIR_NAME: &str = "builtin";
 const USER_SKILLS_DIR_NAME: &str = "user";
+const AGENT_WORKSPACE_DIR_NAME: &str = "workspace";
+const WORKSPACE_MEMORY_DIR_NAME: &str = "memory";
+const WORKSPACE_STATE_FILE_NAME: &str = "state.json";
+const WORKSPACE_BOOTSTRAP_FILE_NAME: &str = "BOOTSTRAP.md";
+const WORKSPACE_STATE_VERSION: u32 = 1;
 
 struct BundledSkillFile {
     relative_path: &'static str,
@@ -37,7 +43,31 @@ struct BundledSkill {
     files: &'static [BundledSkillFile],
 }
 
+struct BundledWorkspaceFile {
+    relative_path: &'static str,
+    contents: &'static [u8],
+}
+
 include!(concat!(env!("OUT_DIR"), "/bundled_skills_generated.rs"));
+include!(concat!(env!("OUT_DIR"), "/bundled_workspace_generated.rs"));
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceState {
+    version: u32,
+    bootstrap_seeded_at: Option<u64>,
+    setup_completed_at: Option<u64>,
+}
+
+impl Default for WorkspaceState {
+    fn default() -> Self {
+        Self {
+            version: WORKSPACE_STATE_VERSION,
+            bootstrap_seeded_at: None,
+            setup_completed_at: None,
+        }
+    }
+}
 
 /// State to hold the sidecar process handle
 pub struct SidecarState {
@@ -118,6 +148,126 @@ pub async fn start_sidecar(app: tauri::AppHandle) -> Result<u16, String> {
 fn resolve_sidecar_app_support_dir() -> Result<String, String> {
     let app_support_dir = crate::app_support::resolve_custom_app_support_dir()?;
     Ok(app_support_dir.to_string_lossy().to_string())
+}
+
+fn current_timestamp_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+fn load_workspace_state(state_path: &Path) -> Result<WorkspaceState, String> {
+    if !state_path.exists() {
+        return Ok(WorkspaceState::default());
+    }
+
+    let raw = fs::read_to_string(state_path).map_err(|e| {
+        format!(
+            "Failed to read workspace state '{}': {}",
+            state_path.display(),
+            e
+        )
+    })?;
+
+    serde_json::from_str::<WorkspaceState>(&raw).map_err(|e| {
+        format!(
+            "Failed to parse workspace state '{}': {}",
+            state_path.display(),
+            e
+        )
+    })
+}
+
+fn write_workspace_state(state_path: &Path, state: &WorkspaceState) -> Result<(), String> {
+    let serialized = serde_json::to_string_pretty(state)
+        .map_err(|e| format!("Failed to serialize workspace state: {}", e))?;
+
+    fs::write(state_path, serialized).map_err(|e| {
+        format!(
+            "Failed to write workspace state '{}': {}",
+            state_path.display(),
+            e
+        )
+    })
+}
+
+fn write_workspace_file_if_missing(destination: &Path, contents: &[u8]) -> Result<(), String> {
+    if destination.exists() {
+        return Ok(());
+    }
+
+    if let Some(parent_dir) = destination.parent() {
+        fs::create_dir_all(parent_dir).map_err(|e| {
+            format!(
+                "Failed to create workspace directory '{}': {}",
+                parent_dir.display(),
+                e
+            )
+        })?;
+    }
+
+    fs::write(destination, contents).map_err(|e| {
+        format!(
+            "Failed to write workspace file '{}': {}",
+            destination.display(),
+            e
+        )
+    })?;
+
+    info!("Seeded workspace file '{}'", destination.display());
+    Ok(())
+}
+
+fn install_bundled_workspace(app_support_dir: &str) -> Result<(), String> {
+    let workspace_root = Path::new(app_support_dir).join(AGENT_WORKSPACE_DIR_NAME);
+    let memory_root = workspace_root.join(WORKSPACE_MEMORY_DIR_NAME);
+    let state_path = workspace_root.join(WORKSPACE_STATE_FILE_NAME);
+    let bootstrap_path = workspace_root.join(WORKSPACE_BOOTSTRAP_FILE_NAME);
+
+    fs::create_dir_all(&workspace_root).map_err(|e| {
+        format!(
+            "Failed to create workspace root '{}': {}",
+            workspace_root.display(),
+            e
+        )
+    })?;
+    fs::create_dir_all(&memory_root).map_err(|e| {
+        format!(
+            "Failed to create workspace memory root '{}': {}",
+            memory_root.display(),
+            e
+        )
+    })?;
+    let mut state = load_workspace_state(&state_path)?;
+    state.version = WORKSPACE_STATE_VERSION;
+
+    for file in BUNDLED_WORKSPACE_FILES {
+        if file.relative_path == WORKSPACE_BOOTSTRAP_FILE_NAME {
+            continue;
+        }
+
+        let destination = workspace_root.join(file.relative_path);
+        write_workspace_file_if_missing(&destination, file.contents)?;
+    }
+
+    if state.bootstrap_seeded_at.is_none() {
+        let seeded_at = current_timestamp_millis();
+
+        if bootstrap_path.exists() {
+            state.bootstrap_seeded_at = Some(seeded_at);
+        } else if state.setup_completed_at.is_some() {
+            state.bootstrap_seeded_at = Some(seeded_at);
+        } else if let Some(bootstrap_file) = BUNDLED_WORKSPACE_FILES
+            .iter()
+            .find(|file| file.relative_path == WORKSPACE_BOOTSTRAP_FILE_NAME)
+        {
+            write_workspace_file_if_missing(&bootstrap_path, bootstrap_file.contents)?;
+            state.bootstrap_seeded_at = Some(seeded_at);
+        }
+    }
+
+    write_workspace_state(&state_path, &state)
 }
 
 fn install_bundled_skills(app_support_dir: &str) -> Result<(), String> {
@@ -612,20 +762,24 @@ async fn start_sidecar_internal(
     let app_support_dir = resolve_sidecar_app_support_dir()?;
     match tokio::task::spawn_blocking({
         let app_support_dir = app_support_dir.clone();
-        move || install_bundled_skills(&app_support_dir)
+        move || -> Result<(), String> {
+            install_bundled_skills(&app_support_dir)?;
+            install_bundled_workspace(&app_support_dir)?;
+            Ok(())
+        }
     })
     .await
     {
         Ok(Ok(())) => {}
         Ok(Err(error)) => {
             warn!(
-                "Failed to install bundled skills into '{}': {}. Continuing sidecar startup without bundled skills.",
+                "Failed to install bundled workspace assets into '{}': {}. Continuing sidecar startup without bundled workspace assets.",
                 app_support_dir, error
             );
         }
         Err(error) => {
             warn!(
-                "Bundled skill installation task failed for '{}': {}. Continuing sidecar startup without bundled skills.",
+                "Bundled workspace asset installation task failed for '{}': {}. Continuing sidecar startup without bundled workspace assets.",
                 app_support_dir, error
             );
         }
@@ -1136,6 +1290,121 @@ mod tests {
         .expect("bundled skill installation should succeed");
 
         assert!(!stale_skill_dir.exists());
+
+        let _ = fs::remove_dir_all(app_support_dir);
+    }
+
+    #[test]
+    fn installs_bundled_workspace_files_when_missing() {
+        let app_support_dir = create_temp_dir("mind-flayer-workspace-install");
+
+        install_bundled_workspace(
+            app_support_dir
+                .to_str()
+                .expect("temp dir should be valid utf-8"),
+        )
+        .expect("bundled workspace installation should succeed");
+
+        let workspace_root = app_support_dir.join(AGENT_WORKSPACE_DIR_NAME);
+        assert!(workspace_root.join("AGENTS.md").exists());
+        assert!(workspace_root.join("SOUL.md").exists());
+        assert!(workspace_root.join("IDENTITY.md").exists());
+        assert!(workspace_root.join("USER.md").exists());
+        assert!(workspace_root.join("BOOTSTRAP.md").exists());
+        assert!(workspace_root.join("MEMORY.md").exists());
+        assert!(workspace_root.join(WORKSPACE_MEMORY_DIR_NAME).exists());
+
+        let state: WorkspaceState = serde_json::from_slice(
+            &fs::read(workspace_root.join(WORKSPACE_STATE_FILE_NAME))
+                .expect("workspace state should be readable"),
+        )
+        .expect("workspace state should be valid JSON");
+
+        assert_eq!(state.version, WORKSPACE_STATE_VERSION);
+        assert!(state.bootstrap_seeded_at.is_some());
+        assert!(state.setup_completed_at.is_none());
+
+        let _ = fs::remove_dir_all(app_support_dir);
+    }
+
+    #[test]
+    fn preserves_existing_workspace_file_contents() {
+        let app_support_dir = create_temp_dir("mind-flayer-workspace-preserve");
+        let workspace_root = app_support_dir.join(AGENT_WORKSPACE_DIR_NAME);
+        let user_file = workspace_root.join("USER.md");
+
+        fs::create_dir_all(&workspace_root).expect("failed to create workspace root");
+        fs::write(&user_file, "custom user content").expect("failed to seed USER.md");
+
+        install_bundled_workspace(
+            app_support_dir
+                .to_str()
+                .expect("temp dir should be valid utf-8"),
+        )
+        .expect("bundled workspace installation should succeed");
+
+        let contents = fs::read_to_string(&user_file).expect("USER.md should still be readable");
+        assert_eq!(contents, "custom user content");
+
+        let _ = fs::remove_dir_all(app_support_dir);
+    }
+
+    #[test]
+    fn does_not_recreate_bootstrap_after_setup_completed() {
+        let app_support_dir = create_temp_dir("mind-flayer-workspace-complete");
+        let workspace_root = app_support_dir.join(AGENT_WORKSPACE_DIR_NAME);
+        let state_path = workspace_root.join(WORKSPACE_STATE_FILE_NAME);
+
+        fs::create_dir_all(&workspace_root).expect("failed to create workspace root");
+        fs::write(
+            &state_path,
+            serde_json::to_string_pretty(&WorkspaceState {
+                version: WORKSPACE_STATE_VERSION,
+                bootstrap_seeded_at: Some(100),
+                setup_completed_at: Some(200),
+            })
+            .expect("workspace state should serialize"),
+        )
+        .expect("failed to seed workspace state");
+
+        install_bundled_workspace(
+            app_support_dir
+                .to_str()
+                .expect("temp dir should be valid utf-8"),
+        )
+        .expect("bundled workspace installation should succeed");
+
+        assert!(!workspace_root.join("BOOTSTRAP.md").exists());
+        assert!(workspace_root.join("AGENTS.md").exists());
+
+        let _ = fs::remove_dir_all(app_support_dir);
+    }
+
+    #[test]
+    fn does_not_mark_partial_workspace_install_as_completed() {
+        let app_support_dir = create_temp_dir("mind-flayer-workspace-partial");
+        let workspace_root = app_support_dir.join(AGENT_WORKSPACE_DIR_NAME);
+
+        fs::create_dir_all(&workspace_root).expect("failed to create workspace root");
+        fs::write(workspace_root.join("USER.md"), "custom user content")
+            .expect("failed to seed USER.md");
+
+        install_bundled_workspace(
+            app_support_dir
+                .to_str()
+                .expect("temp dir should be valid utf-8"),
+        )
+        .expect("bundled workspace installation should succeed");
+
+        let state: WorkspaceState = serde_json::from_slice(
+            &fs::read(workspace_root.join(WORKSPACE_STATE_FILE_NAME))
+                .expect("workspace state should be readable"),
+        )
+        .expect("workspace state should be valid JSON");
+
+        assert!(workspace_root.join("BOOTSTRAP.md").exists());
+        assert!(state.bootstrap_seeded_at.is_some());
+        assert!(state.setup_completed_at.is_none());
 
         let _ = fs::remove_dir_all(app_support_dir);
     }

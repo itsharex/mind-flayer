@@ -30,7 +30,7 @@ export class ToolService {
    *
    * @param options - Tool configuration options
    * @param options.useWebSearch - Whether to enable web search
-   * @param options.chatId - Chat session ID for bash execution workspace isolation
+   * @param options.chatId - Chat session ID for bash execution sandbox isolation
    * @param options.includeBashExecution - Whether to include bash tool (default true)
    * @returns Tools object for AI SDK
    */
@@ -44,6 +44,22 @@ export class ToolService {
     const tools: AllTools = {}
     const readToolPlugin = toolRegistry.get("read")
     tools.read = readToolPlugin.createInstance("") as AllTools["read"]
+    tools.appendWorkspaceSection = toolRegistry
+      .get("appendWorkspaceSection")
+      .createInstance("") as AllTools["appendWorkspaceSection"]
+    tools.replaceWorkspaceSection = toolRegistry
+      .get("replaceWorkspaceSection")
+      .createInstance("") as AllTools["replaceWorkspaceSection"]
+    tools.appendDailyMemory = toolRegistry
+      .get("appendDailyMemory")
+      .createInstance("") as AllTools["appendDailyMemory"]
+    tools.deleteWorkspaceFile = toolRegistry
+      .get("deleteWorkspaceFile")
+      .createInstance("") as AllTools["deleteWorkspaceFile"]
+    tools.memorySearch = toolRegistry
+      .get("memorySearch")
+      .createInstance("") as AllTools["memorySearch"]
+    tools.memoryGet = toolRegistry.get("memoryGet").createInstance("") as AllTools["memoryGet"]
 
     // Add web search tool if enabled
     if (useWebSearch) {

@@ -11,7 +11,7 @@ export interface ITool {
   /**
    * Create a tool instance with the given configuration.
    *
-   * @param apiKey - API key or session identifier for the tool
+   * @param apiKey - Tool-specific configuration token such as an API key or session identifier
    * @param source - Command source: "channel" or "desktop"
    * @returns AI SDK tool instance created by tool() function
    */

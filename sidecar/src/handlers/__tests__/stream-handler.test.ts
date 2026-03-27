@@ -4,6 +4,7 @@ const streamTextMock = vi.fn()
 const compactMessagesMock = vi.fn()
 const discoverSkillsSafelyMock = vi.fn()
 const buildSystemPromptMock = vi.fn()
+const loadWorkspacePromptContextSafelyMock = vi.fn()
 
 vi.mock("ai", () => ({
   InvalidToolInputError: {
@@ -36,6 +37,15 @@ vi.mock("../../utils/system-prompt-builder", async importOriginal => {
   }
 })
 
+vi.mock("../../workspace", async importOriginal => {
+  const actual = await importOriginal<typeof import("../../workspace")>()
+  return {
+    ...actual,
+    loadWorkspacePromptContextSafely: (...args: unknown[]) =>
+      loadWorkspacePromptContextSafelyMock(...args)
+  }
+})
+
 import { createStreamResponse } from "../stream-handler"
 
 describe("createStreamResponse", () => {
@@ -45,13 +55,18 @@ describe("createStreamResponse", () => {
     discoverSkillsSafelyMock.mockResolvedValue([])
     compactMessagesMock.mockResolvedValue([{ role: "user", parts: [] }])
     buildSystemPromptMock.mockReturnValue("system prompt")
+    loadWorkspacePromptContextSafelyMock.mockResolvedValue({
+      workspaceDir: "/tmp/app-support/workspace",
+      needsBootstrap: true,
+      setupCompletedAt: null,
+      files: []
+    })
     streamTextMock.mockReturnValue({
       toUIMessageStreamResponse: vi.fn(() => "stream-response")
     })
   })
 
   it("uses safe skill discovery for stream requests", async () => {
-    const consoleWarnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     discoverSkillsSafelyMock.mockResolvedValueOnce([
       {
         id: "bundled:reader",
@@ -90,6 +105,12 @@ describe("createStreamResponse", () => {
       modelProviderLabel: "MiniMax",
       modelId: "model-a",
       modelLabel: "MiniMax-M2.5",
+      workspaceContext: {
+        workspaceDir: "/tmp/app-support/workspace",
+        needsBootstrap: true,
+        setupCompletedAt: null,
+        files: []
+      },
       skills: [
         {
           id: "bundled:reader",
@@ -102,9 +123,34 @@ describe("createStreamResponse", () => {
     })
     expect(streamTextMock).toHaveBeenCalled()
     expect(discoverSkillsSafelyMock).toHaveBeenCalledWith("stream request")
-    expect(consoleWarnSpy).not.toHaveBeenCalled()
+  })
 
-    consoleWarnSpy.mockRestore()
+  it("continues without workspace context when workspace loading fails", async () => {
+    loadWorkspacePromptContextSafelyMock.mockResolvedValueOnce(undefined)
+
+    const response = await createStreamResponse({
+      model: {} as never,
+      modelProvider: "minimax",
+      modelProviderLabel: "MiniMax",
+      modelId: "model-a",
+      modelLabel: "MiniMax-M2.5",
+      messages: [{ role: "user", parts: [] }] as never,
+      tools: {},
+      toolChoice: "auto" as never,
+      abortSignal: new AbortController().signal,
+      reasoningEnabled: true,
+      reasoningEffort: "default"
+    })
+
+    expect(response).toBe("stream-response")
+    expect(buildSystemPromptMock).toHaveBeenCalledWith({
+      modelProvider: "minimax",
+      modelProviderLabel: "MiniMax",
+      modelId: "model-a",
+      modelLabel: "MiniMax-M2.5",
+      skills: [],
+      workspaceContext: undefined
+    })
   })
 
   it("passes providerOptions to streamText for supported anthropic models", async () => {

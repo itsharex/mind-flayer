@@ -4,7 +4,28 @@ import { buildSystemPrompt } from "../system-prompt-builder"
 describe("buildSystemPrompt", () => {
   const baseOptions = {
     modelProvider: "minimax",
-    modelId: "model-a"
+    modelId: "model-a",
+    workspaceContext: {
+      workspaceDir: "/Users/USERNAME/Library/Application Support/Mind Flayer/workspace",
+      needsBootstrap: true,
+      setupCompletedAt: null,
+      files: [
+        {
+          path: "AGENTS.md",
+          absolutePath:
+            "/Users/USERNAME/Library/Application Support/Mind Flayer/workspace/AGENTS.md",
+          content: "Follow BOOTSTRAP.md when it exists.",
+          truncated: false
+        },
+        {
+          path: "BOOTSTRAP.md",
+          absolutePath:
+            "/Users/USERNAME/Library/Application Support/Mind Flayer/workspace/BOOTSTRAP.md",
+          content: "Ask who you are and delete this file when complete.",
+          truncated: false
+        }
+      ]
+    }
   }
 
   it("includes markdown image instructions for local screenshots", () => {
@@ -15,8 +36,25 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("![screenshot](file:///absolute/path/to/image.png)")
     expect(prompt).toContain("Do not reply with only a plain file path for images.")
     expect(prompt).not.toContain("final section titled 'Attachments:'")
+    expect(prompt).toContain("## Project Context")
+    expect(prompt).toContain("Shared workspace root:")
+    expect(prompt).toContain("Shared workspace root: <workspace>")
+    expect(prompt).toContain("<workspace_context>")
+    expect(prompt).toContain('path="AGENTS.md"')
+    expect(prompt).toContain('path="BOOTSTRAP.md"')
+    expect(prompt).toContain("bootstrap_active: true")
+    expect(prompt).toContain("Use appendWorkspaceSection to add facts to USER.md")
+    expect(prompt).toContain("Use replaceWorkspaceSection only when you intentionally want")
+    expect(prompt).toContain("MEMORY.md is structured long-term memory")
+    expect(prompt).toContain("appendDailyMemory")
+    expect(prompt).toContain("Use deleteWorkspaceFile only for BOOTSTRAP.md")
+    expect(prompt).toContain("AGENTS.md is immutable")
     expect(prompt).toContain("- model: minimax/model-a")
     expect(prompt).not.toContain("- channel:")
+    expect(prompt).not.toContain('absolute_path="')
+    expect(prompt).not.toContain(
+      "/Users/USERNAME/Library/Application Support/Mind Flayer/workspace"
+    )
   })
 
   it("includes channel runtime context when channel mode is enabled", () => {
@@ -57,6 +95,18 @@ describe("buildSystemPrompt", () => {
     })
 
     expect(prompt).toContain("- model: MiniMax/MiniMax-M2.5")
+  })
+
+  it("shows an unavailable notice when no workspace context is provided", () => {
+    const prompt = buildSystemPrompt({
+      modelProvider: "minimax",
+      modelId: "model-a"
+    })
+
+    expect(prompt).toContain("The global agent workspace is unavailable")
+    expect(prompt).toContain(
+      "Do not assume BOOTSTRAP.md, MEMORY.md, or daily memory files were loaded."
+    )
   })
 
   it("omits channel runtime context when channel is empty", () => {

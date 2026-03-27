@@ -4,6 +4,7 @@
  */
 
 import type { SkillCatalogEntry } from "../skills/catalog"
+import type { WorkspacePromptContext } from "../workspace"
 
 type SkillPromptEntry = Pick<
   SkillCatalogEntry,
@@ -17,15 +18,7 @@ export interface BuildSystemPromptOptions {
   modelLabel?: string
   channel?: string
   skills?: SkillPromptEntry[]
-}
-
-/**
- * Build role context for the AI agent.
- *
- * @returns Role context string
- */
-function buildRoleContext(): string {
-  return "You are Mind Flayer, a local desktop AI assistant."
+  workspaceContext?: WorkspacePromptContext
 }
 
 function buildDefaultResponseFormatRules(): string {
@@ -108,6 +101,49 @@ function buildSkillsPromptSection(options: BuildSystemPromptOptions): string {
   return lines.join("\n")
 }
 
+function buildWorkspacePromptSection(options: BuildSystemPromptOptions): string {
+  const workspaceContext = options.workspaceContext
+  if (!workspaceContext) {
+    return [
+      "## Project Context",
+      "The global agent workspace is unavailable for this request.",
+      "Do not assume BOOTSTRAP.md, MEMORY.md, or daily memory files were loaded."
+    ].join("\n")
+  }
+
+  const fileSections =
+    workspaceContext.files.length > 0
+      ? workspaceContext.files.map(file =>
+          [
+            `<workspace_file path="${escapeXmlAttribute(file.path)}"${file.truncated ? ' truncated="true"' : ""}>`,
+            file.content,
+            "</workspace_file>"
+          ].join("\n")
+        )
+      : ["No workspace prompt files were loaded."]
+
+  return [
+    "## Project Context",
+    "Shared workspace root: <workspace>",
+    "- Treat injected workspace files as the source of truth for identity, behavior, and long-term context.",
+    "- BOOTSTRAP.md is passive: if it is present below, follow it in this conversation and delete it with deleteWorkspaceFile when onboarding is complete.",
+    "- Use appendWorkspaceSection to add facts to USER.md, SOUL.md, IDENTITY.md, or MEMORY.md. It can append to an existing ## section or create a new one.",
+    "- Use replaceWorkspaceSection only when you intentionally want to rewrite an existing ## section in USER.md, SOUL.md, IDENTITY.md, or MEMORY.md.",
+    "- USER.md should keep stable human metadata easy to scan. Its Identity section is structured around Name, What to call them, Pronouns, Timezone, and Notes.",
+    "- MEMORY.md is structured long-term memory. USER.md, SOUL.md, IDENTITY.md, and MEMORY.md use H2 sections only; section boundaries are defined only by ## headings.",
+    "- Use appendDailyMemory for memory/YYYY-MM-DD.md. Daily memory files are append-only chronological logs and must never be reorganized or rewritten.",
+    "- Use deleteWorkspaceFile only for BOOTSTRAP.md. AGENTS.md is immutable and must never be modified.",
+    "- Daily memory files under memory/ are not injected automatically. Use memorySearch and memoryGet when you need recent history, then appendDailyMemory to record new same-day context.",
+    `- bootstrap_active: ${workspaceContext.needsBootstrap ? "true" : "false"}`,
+    workspaceContext.setupCompletedAt !== null
+      ? `- setup_completed_at: ${workspaceContext.setupCompletedAt}`
+      : "- setup_completed_at: null",
+    "<workspace_context>",
+    ...fileSections,
+    "</workspace_context>"
+  ].join("\n")
+}
+
 /**
  * Build system context including environment and time info.
  *
@@ -169,9 +205,9 @@ function buildRuntimeContext(options: BuildSystemPromptOptions): string {
  */
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
   return [
-    buildRoleContext(),
     buildResponseFormatRules(options.channel),
     buildSkillsPromptSection(options) || null,
+    buildWorkspacePromptSection(options),
     buildRuntimeContext(options)
   ]
     .filter(Boolean)

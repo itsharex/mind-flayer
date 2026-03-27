@@ -48,7 +48,7 @@ describe("MessageResponse local image rendering", () => {
   })
 
   it("renders local image with sidecar proxy URL", async () => {
-    const localPath = "/Users/didi/Desktop/a.png"
+    const localPath = "/Users/USERNAME/Desktop/a.png"
 
     await act(async () => {
       root.render(
@@ -84,7 +84,7 @@ describe("MessageResponse local image rendering", () => {
   })
 
   it("renders file URL image with sidecar proxy URL", async () => {
-    const fileUrlPath = "file:///Users/didi/Desktop/a.png"
+    const fileUrlPath = "file:///Users/USERNAME/Desktop/a.png"
 
     await act(async () => {
       root.render(
@@ -108,7 +108,7 @@ describe("MessageResponse local image rendering", () => {
 
   it("renders file URL image with whitespace in the local path", async () => {
     const fileUrlPath =
-      "file:///Users/didi/Library/Application Support/Mind Flayer/workspaces/shot one.png"
+      "file:///Users/USERNAME/Library/Application Support/Mind Flayer/sandboxes/shot one.png"
 
     await act(async () => {
       root.render(
@@ -131,13 +131,13 @@ describe("MessageResponse local image rendering", () => {
     const proxiedFileUrl = parsedUrl.searchParams.get("path")
     expect(proxiedFileUrl).toBeTruthy()
     expect(decodeURIComponent(new URL(proxiedFileUrl as string).pathname)).toBe(
-      "/Users/didi/Library/Application Support/Mind Flayer/workspaces/shot one.png"
+      "/Users/USERNAME/Library/Application Support/Mind Flayer/sandboxes/shot one.png"
     )
     expect(parsedUrl.searchParams.get("_ts")).toBeTruthy()
   })
 
   it("falls back to text link when image loading fails", async () => {
-    const localPath = "/Users/didi/Desktop/missing.png"
+    const localPath = "/Users/USERNAME/Desktop/missing.png"
 
     await act(async () => {
       root.render(

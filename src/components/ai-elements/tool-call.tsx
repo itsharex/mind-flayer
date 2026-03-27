@@ -1,16 +1,11 @@
 import { useControllableState } from "@radix-ui/react-use-controllable-state"
 import {
-  BookOpenTextIcon,
   CheckIcon,
   ChevronRightIcon,
   CircleXIcon,
   CopyIcon,
-  GlobeIcon,
-  LibraryBigIcon,
   Loader2Icon,
-  TerminalIcon,
   TimerIcon,
-  WrenchIcon,
   XIcon
 } from "lucide-react"
 import type { ComponentProps, ReactNode } from "react"
@@ -19,6 +14,7 @@ import { useTranslation } from "react-i18next"
 import { Streamdown } from "streamdown"
 import { Shimmer } from "@/components/ai-elements/shimmer"
 import { Terminal } from "@/components/ai-elements/terminal"
+import { getToolIcon } from "@/components/ai-elements/tool-icon"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { useActionConstants, useErrorConstants, useToolConstants } from "@/lib/constants"
@@ -143,7 +139,7 @@ export const ToolCall = memo(
       <ToolCallContext.Provider
         value={{ isOpen, setIsOpen, duration: durationProp, toolName, resultCount, state }}
       >
-        <div className={cn("rounded-lg border border-border/50 bg-muted/30 p-3", className)}>
+        <div className={cn("rounded-lg border border-border/50 bg-muted/30 px-2 py-2", className)}>
           <Collapsible
             className="not-prose"
             onOpenChange={handleOpenChange}
@@ -157,26 +153,6 @@ export const ToolCall = memo(
     )
   }
 )
-
-/**
- * Get the appropriate icon for the tool
- */
-const getToolIcon = (toolName: string) => {
-  const iconClass = "size-3.5 transition-colors"
-
-  switch (toolName.toLowerCase()) {
-    case "websearch":
-      return <GlobeIcon className={iconClass} />
-    case "bashexecution":
-      return <TerminalIcon className={iconClass} />
-    case "read":
-      return <BookOpenTextIcon className={iconClass} />
-    case "skillread":
-      return <LibraryBigIcon className={iconClass} />
-    default:
-      return <WrenchIcon className={iconClass} />
-  }
-}
 
 export type ToolCallTriggerProps = ComponentProps<typeof CollapsibleTrigger> & {
   icon?: ReactNode
@@ -249,7 +225,7 @@ export const ToolCallTrigger = memo(
     const showDuration = FINAL_STATES.includes(state) && duration !== undefined
     const triggerContent = children ?? (
       <>
-        {icon ?? getToolIcon(toolName)}
+        {icon ?? getToolIcon(toolName, "size-3 transition-colors")}
         {getToolMessage(toolName, state, resultCount)}
         {trailingContent}
       </>
@@ -258,14 +234,12 @@ export const ToolCallTrigger = memo(
     return (
       <CollapsibleTrigger
         className={cn(
-          "group flex w-full items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground",
+          "group flex w-full items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground",
           className
         )}
         {...props}
       >
-        <div className="flex min-w-0 flex-1 text-xs font-medium items-center gap-2">
-          {triggerContent}
-        </div>
+        <div className="flex min-w-0 flex-1 items-center gap-2">{triggerContent}</div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {showDuration && (
             <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground/90">
@@ -293,7 +267,7 @@ export const ToolCallContent = memo(
   ({ className, maxHeight = "16rem", children, ...props }: ToolCallContentProps) => (
     <CollapsibleContent
       className={cn(
-        "relative mt-3 text-sm leading-normal",
+        "relative mt-3 text-xs leading-normal",
         "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2",
         "text-muted-foreground outline-none data-[state=closed]:animate-out data-[state=open]:animate-in",
         className
@@ -318,7 +292,7 @@ export const ToolCallInputStreaming = memo(({ description }: ToolCallInputStream
   return (
     <div className="flex items-start gap-2 py-1">
       <Loader2Icon className="mt-0.5 size-3.5 shrink-0 animate-spin" />
-      <div className="min-w-0 flex-1 text-sm text-muted-foreground">
+      <div className="min-w-0 flex-1 text-xs text-muted-foreground">
         {description ?? toolConstants.states.running}
       </div>
     </div>
@@ -513,7 +487,7 @@ export const ToolCallOutputError = memo(({ errorText, input }: ToolCallOutputErr
       <BashExecCommandLine input={input} />
       <div className="flex items-center gap-2">
         <CircleXIcon className="size-3.5 shrink-0 text-destructive" />
-        <div className="text-sm text-destructive max-h-48 overflow-y-auto">
+        <div className="text-xs text-destructive max-h-48 overflow-y-auto">
           {errorText ?? errorConstants.toolCallError}
         </div>
       </div>
@@ -533,7 +507,7 @@ export const ToolCallOutputDenied = memo(({ message, input }: ToolCallOutputDeni
       <BashExecCommandLine input={input} />
       <div className="flex items-center gap-2">
         <CircleXIcon className="size-3.5 shrink-0 text-destructive" />
-        <div className="text-sm text-destructive max-h-48 overflow-y-auto">
+        <div className="text-xs text-destructive max-h-48 overflow-y-auto">
           {message ?? errorConstants.toolExecutionDenied}
         </div>
       </div>

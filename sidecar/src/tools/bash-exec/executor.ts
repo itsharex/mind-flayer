@@ -129,7 +129,7 @@ function buildExecutionEnv(workingDir: string): NodeJS.ProcessEnv {
  * Executes a command with arguments in a specified working directory
  * @param cmd - The command to execute
  * @param args - Array of command arguments
- * @param workingDir - Working directory for command execution (session workspace)
+ * @param workingDir - Working directory for command execution (session sandbox)
  * @param abortSignal - Signal to abort execution
  * @returns Execution result with stdout, stderr, exit code, and timeout flag
  */

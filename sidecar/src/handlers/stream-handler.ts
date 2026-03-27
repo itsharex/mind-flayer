@@ -13,6 +13,7 @@ import type { ReasoningEffort } from "../type"
 import { compactMessages } from "../utils/message-compaction"
 import { buildProviderOptions } from "../utils/provider-options"
 import { buildSystemPrompt } from "../utils/system-prompt-builder"
+import { loadWorkspacePromptContextSafely } from "../workspace"
 
 /**
  * Options for creating a stream response.
@@ -54,9 +55,10 @@ export async function createStreamResponse(options: StreamHandlerOptions) {
     reasoningEffort
   } = options
 
-  const [skills, compactedMessages] = await Promise.all([
+  const [skills, compactedMessages, workspaceContext] = await Promise.all([
     discoverSkillsSafely("stream request"),
-    compactMessages(messages, tools)
+    compactMessages(messages, tools),
+    loadWorkspacePromptContextSafely("stream request")
   ])
   const enabledSkills = filterDisabledSkills(skills, options.disabledSkillIds ?? [])
   const systemPrompt = buildSystemPrompt({
@@ -64,10 +66,16 @@ export async function createStreamResponse(options: StreamHandlerOptions) {
     modelProviderLabel,
     modelId,
     modelLabel,
-    skills: enabledSkills
+    skills: enabledSkills,
+    workspaceContext
   })
-  console.info("[sidecar] systemPrompt:", systemPrompt)
-  console.dir({ compactedMessages }, { depth: null })
+  console.info("[sidecar] Prepared stream request", {
+    messageCount: compactedMessages.length,
+    skillCount: enabledSkills.length,
+    workspaceFileCount: workspaceContext?.files.length ?? 0,
+    bootstrapActive: workspaceContext?.needsBootstrap ?? false,
+    systemPromptLength: systemPrompt.length
+  })
 
   const providerOptions = buildProviderOptions({
     modelProvider,

@@ -1,17 +1,12 @@
-/**
- * Workspace cleanup route handler.
- * Allows cleanup of bash execution sandbox directories.
- */
-
 import type { Context } from "hono"
-import { cleanupWorkspace } from "../tools/bash-exec/workspace"
+import { cleanupSandbox } from "../tools/bash-exec/sandbox"
 import { BadRequestError, mapErrorToResponse } from "../utils/http-errors"
 
 /**
- * Cleanup workspace endpoint handler.
+ * Cleanup sandbox endpoint handler.
  * Deletes the bash execution sandbox directory for a specific chat.
  */
-export async function handleCleanupWorkspace(c: Context) {
+export async function handleCleanupSandbox(c: Context) {
   try {
     const body = await c.req.json()
     const chatId = body?.chatId
@@ -21,14 +16,14 @@ export async function handleCleanupWorkspace(c: Context) {
       throw new BadRequestError("chatId is required")
     }
 
-    console.log(`[sidecar] Cleaning up workspace for chat: ${chatId}`)
+    console.log(`[sidecar] Cleaning up sandbox for chat: ${chatId}`)
 
-    // Cleanup workspace
-    await cleanupWorkspace(chatId)
+    // Cleanup sandbox
+    await cleanupSandbox(chatId)
 
     return c.json({
       success: true,
-      message: `Workspace for chat ${chatId} cleaned up successfully`
+      message: `Sandbox for chat ${chatId} cleaned up successfully`
     })
   } catch (error) {
     console.error("[sidecar] Cleanup error:", error)
@@ -36,3 +31,5 @@ export async function handleCleanupWorkspace(c: Context) {
     return c.json(errorResponse.body, errorResponse.statusCode)
   }
 }
+
+export const handleCleanupWorkspace = handleCleanupSandbox

@@ -1,6 +1,6 @@
 /**
  * Bash execution tool for Mind Flayer
- * Allows AI agents to execute shell commands in isolated session workspaces
+ * Allows AI agents to execute shell commands in isolated session sandboxes
  */
 
 import { tool } from "ai"
@@ -8,8 +8,8 @@ import { z } from "zod"
 import type { ITool } from "../base-tool"
 import { executeCommand } from "./executor"
 import { assertPlatformSupported } from "./platform"
+import { ensureChatSandbox } from "./sandbox"
 import { type CommandSource, validateCommand } from "./validator"
-import { ensureChatWorkspace } from "./workspace"
 
 /**
  * Bash execution tool implementation.
@@ -25,8 +25,8 @@ export class BashExecutionTool implements ITool {
 
 /**
  * Bash execution tool definition factory
- * This tool executes shell commands in isolated session workspaces
- * @param chatId - Chat session ID for workspace isolation
+ * This tool executes shell commands in isolated session sandboxes
+ * @param chatId - Chat session ID for sandbox isolation
  */
 export const bashExecutionTool = (chatId: string, source: CommandSource = "desktop") => {
   // Check platform support on tool creation
@@ -34,18 +34,18 @@ export const bashExecutionTool = (chatId: string, source: CommandSource = "deskt
 
   if (!chatId) {
     console.warn(
-      "[BashExec] No chatId provided, using a transient session workspace that will be cleaned up on sidecar shutdown"
+      "[BashExec] No chatId provided, using a transient session sandbox that will be cleaned up on sidecar shutdown"
     )
   }
 
   return tool({
-    description: `Execute shell commands in isolated session workspaces under Application Support (macOS/Linux only; not supported on Windows).
+    description: `Execute shell commands in isolated session sandboxes under Application Support (macOS/Linux only; not supported on Windows).
 
 IMPORTANT: Commands are executed using direct process spawn (not shell).
 - Use 'command' field for the executable name (e.g., "ls", "cat", "grep")  
 - Each flag or parameter must be a separate array element (e.g., ["-la"] or ["-l","-a"] NOT ["- la"])
 - Do NOT use shell syntax like pipes (|), redirects (>, <), or command chains (;, &&, ||)
-- Working directory is a per-session workspace, HOME is the real user home, and args can reference real file paths
+- Working directory is a per-session sandbox, HOME is the real user home, and args can reference real file paths
 - Safe commands (ls, cat, grep, etc.) execute immediately
 - Blocked commands are always denied by policy
 - All other commands require user approval
@@ -53,7 +53,7 @@ IMPORTANT: Commands are executed using direct process spawn (not shell).
 Examples:
   ✅ { command: "ls", args: ["-la", "~/Desktop"] } - List Desktop files
   ✅ { command: "cat", args: ["~/Documents/file.txt"] } - Read real file
-  ✅ { command: "find", args: [".", "-name", "*.ts"] } - Find in current session workspace
+  ✅ { command: "find", args: [".", "-name", "*.ts"] } - Find in the current session sandbox
   ✅ { command: "screencapture", args: ["-x", "~/Desktop/screenshot.png"] } - Take a desktop screenshot
   ❌ { command: "ls | grep test" } - NO: shell syntax not supported
   ❌ { command: "cat file.txt > output.txt" } - NO: use 'cp' command instead
@@ -123,16 +123,16 @@ Do not return only the plain path.`,
       }
 
       try {
-        // Ensure workspace exists for this chat
-        const workspacePath = await ensureChatWorkspace(chatId)
-        console.log(`[BashExec] Using workspace: ${workspacePath}`)
+        // Ensure sandbox exists for this chat
+        const sandboxPath = await ensureChatSandbox(chatId)
+        console.log(`[BashExec] Using sandbox: ${sandboxPath}`)
 
         // Execute the command
         const startTime = Date.now()
         const result = await executeCommand(
           command,
           args,
-          workspacePath,
+          sandboxPath,
           abortSignal || new AbortController().signal
         )
         const duration = Date.now() - startTime
@@ -148,7 +148,7 @@ Do not return only the plain path.`,
           stdout: result.stdout,
           stderr: result.stderr,
           exitCode: result.exitCode,
-          workingDir: workspacePath,
+          workingDir: sandboxPath,
           executedAt: new Date().toISOString()
         }
       } catch (error) {

@@ -11,7 +11,7 @@ const SIDECAR_ORIGIN = "http://localhost:21420"
 describe("buildImagePreviewPayload", () => {
   it("builds local image payloads from absolute paths", () => {
     const payload = buildImagePreviewPayload(
-      "/Users/didi/Desktop/photo.png",
+      "/Users/USERNAME/Desktop/photo.png",
       "local",
       SIDECAR_ORIGIN
     )
@@ -20,21 +20,21 @@ describe("buildImagePreviewPayload", () => {
       alt: "local",
       filename: "photo.png",
       kind: "local",
-      localPath: "/Users/didi/Desktop/photo.png",
-      originalUrl: "/Users/didi/Desktop/photo.png",
-      resourceUrl: `${SIDECAR_ORIGIN}/api/local-image?path=${encodeURIComponent("/Users/didi/Desktop/photo.png")}`
+      localPath: "/Users/USERNAME/Desktop/photo.png",
+      originalUrl: "/Users/USERNAME/Desktop/photo.png",
+      resourceUrl: `${SIDECAR_ORIGIN}/api/local-image?path=${encodeURIComponent("/Users/USERNAME/Desktop/photo.png")}`
     })
   })
 
   it("builds local image payloads from file URLs", () => {
     const payload = buildImagePreviewPayload(
-      "file:///Users/didi/Desktop/shot%20one.png",
+      "file:///Users/USERNAME/Desktop/shot%20one.png",
       "file-url",
       SIDECAR_ORIGIN
     )
 
     expect(payload?.kind).toBe("local")
-    expect(payload?.localPath).toBe("/Users/didi/Desktop/shot one.png")
+    expect(payload?.localPath).toBe("/Users/USERNAME/Desktop/shot one.png")
     expect(payload?.filename).toBe("shot one.png")
   })
 
