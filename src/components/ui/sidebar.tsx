@@ -266,7 +266,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
           }}
           {...props}
         >
-          <PanelLeftIcon className="size-4 lucide-light" />
+          <PanelLeftIcon className="size-4 lucide-light lucide-stroke-bold" />
           <span className="sr-only">{t("sidebar.toggleSidebar")}</span>
         </Button>
       </TooltipTrigger>

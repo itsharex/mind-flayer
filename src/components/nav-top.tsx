@@ -32,7 +32,7 @@ function NewChatTrigger({ className, ...props }: React.ComponentProps<typeof But
           )}
           {...props}
         >
-          <MessageSquarePlus className="size-4 lucide-light" />
+          <MessageSquarePlus className="size-4 lucide-light lucide-stroke-bold" />
           <span className="sr-only">{t("nav.newChat")}</span>
         </Button>
       </TooltipTrigger>

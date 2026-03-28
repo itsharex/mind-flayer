@@ -64,10 +64,13 @@ function SelectModel({ className, value, onChange, ...props }: SelectModelProps)
               className={cn("h-7 gap-2 data-[state=open]:bg-accent font-normal text-xs", className)}
               {...props}
             >
-              <ProviderLogo providerId={selectedModel.provider} className="size-3.5" />
+              <ProviderLogo providerId={selectedModel.provider} className="size-3 opacity-70" />
               {selectedModel.label || t("model.selectModel")}
               <ChevronDown
-                className={cn("size-3 transition-transform duration-300", open && "-rotate-180")}
+                className={cn(
+                  "size-3 opacity-70 transition-transform duration-300",
+                  open && "-rotate-180"
+                )}
               />
               <span className="sr-only">{t("model.selectModel")}</span>
             </Button>
@@ -104,7 +107,7 @@ function SelectModel({ className, value, onChange, ...props }: SelectModelProps)
                       data-item-value={model.api_id}
                     >
                       <span className="flex min-w-0 flex-1 items-center gap-3">
-                        <ProviderLogo providerId={model.provider} className="size-4" />
+                        <ProviderLogo providerId={model.provider} className="size-3.5" />
                         <span className="text-left">{model.label}</span>
                       </span>
                       <span className="flex size-4 shrink-0 items-center justify-center">
