@@ -1108,7 +1108,7 @@ export const PromptInputSubmit = ({
   let Icon = <ArrowUpIcon className="size-4 fixed" />
 
   if (status === "submitted") {
-    Icon = <Loader2Icon className="fixedanimate-spin" />
+    Icon = <Loader2Icon className="fixed animate-spin" />
   } else if (status === "streaming") {
     Icon = <SquareIcon className="fixed size-3 fill-current" />
   } else if (status === "error") {
@@ -1118,7 +1118,12 @@ export const PromptInputSubmit = ({
   return (
     <InputGroupButton
       aria-label="Submit"
-      className={cn("rounded-full bg-foreground", "transition-all duration-200", className)}
+      className={cn(
+        "rounded-full bg-foreground",
+        "disabled:bg-foreground/50 disabled:opacity-100",
+        "transition-all duration-200",
+        className
+      )}
       size={size}
       type="submit"
       variant={variant}
