@@ -131,7 +131,7 @@ export function useAppUpdater() {
       await relaunchAfterUpdate()
     } catch (nextError) {
       setError(toErrorMessage(nextError))
-      setStatus("error")
+      setStatus("restart-required")
       throw nextError
     }
   }, [])
