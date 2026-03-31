@@ -585,7 +585,10 @@ export function ChannelTelegramChat() {
                   return (
                     <MessageBranch defaultBranch={0} key={message.id}>
                       <MessageBranchContent>
-                        <Message from={message.role}>
+                        <Message
+                          className={message.role === "assistant" ? "pt-4" : undefined}
+                          from={message.role}
+                        >
                           <MessageContent>
                             <div className="whitespace-pre-wrap wrap-break-word">
                               {textToRender}

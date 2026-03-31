@@ -373,6 +373,30 @@ describe("ChannelTelegramChat", () => {
     ).toBeNull()
   })
 
+  it("adds top spacing before assistant replies in the conversation pane", async () => {
+    await act(async () => {
+      root.render(
+        <I18nextProvider i18n={i18n}>
+          <SidebarProvider>
+            <ChannelTelegramChat />
+          </SidebarProvider>
+        </I18nextProvider>
+      )
+    })
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const assistantText = Array.from(
+      container.querySelectorAll<HTMLElement>(".whitespace-pre-wrap")
+    ).find(node => node.textContent === "latest answer")
+
+    expect(assistantText).not.toBeNull()
+    expect(assistantText?.closest(".group")?.className).toContain("pt-4")
+  })
+
   it("shows delete only for archived threads and refreshes selection after deletion", async () => {
     let currentSessions = [
       {

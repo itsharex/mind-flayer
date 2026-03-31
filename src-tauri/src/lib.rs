@@ -133,7 +133,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build());
 
-    builder
+    let app = builder
         .invoke_handler(tauri::generate_handler![
             greet,
             save_provider_config,
@@ -142,6 +142,22 @@ pub fn run() {
             list_all_providers,
             wait_for_sidecar_port
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle, event| match event {
+        tauri::RunEvent::Exit => {
+            tauri::async_runtime::block_on(setup::cleanup_sidecar(app_handle.clone()));
+        }
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Reopen {
+            has_visible_windows: false,
+            ..
+        } => {
+            if let Err(e) = setup::show_main_window(app_handle) {
+                log::error!("Failed to restore main window on reopen: {}", e);
+            }
+        }
+        _ => {}
+    });
 }
