@@ -36,10 +36,9 @@ pub fn init(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>
         #[cfg(target_os = "macos")]
         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
             info!("Main window close requested, hiding window instead of closing it");
-            api.prevent_close();
-
-            if let Err(e) = window_for_close.hide() {
-                error!("Failed to hide main window: {}", e);
+            match window_for_close.hide() {
+                Ok(()) => api.prevent_close(),
+                Err(e) => error!("Failed to hide main window: {}", e),
             }
         }
     });
@@ -58,6 +57,7 @@ pub fn init(app: &mut App) -> std::result::Result<(), Box<dyn std::error::Error>
                     error!("Failed to push initial config to sidecar: {}", e);
                 }
             }
+            Err(e) if sidecar::is_sidecar_shutdown_error(&e) => info!("{}", e),
             Err(e) => error!("Failed to start sidecar: {}", e),
         }
     });
