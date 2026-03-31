@@ -5,7 +5,10 @@ use std::{
     fs,
     net::TcpListener,
     path::Path,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::Manager;
@@ -32,6 +35,8 @@ const WORKSPACE_MEMORY_DIR_NAME: &str = "memory";
 const WORKSPACE_STATE_FILE_NAME: &str = "state.json";
 const WORKSPACE_BOOTSTRAP_FILE_NAME: &str = "BOOTSTRAP.md";
 const WORKSPACE_STATE_VERSION: u32 = 1;
+const SIDECAR_SHUTDOWN_MESSAGE: &str =
+    "Sidecar startup skipped because application is shutting down";
 
 struct BundledSkillFile {
     relative_path: &'static str,
@@ -73,13 +78,29 @@ impl Default for WorkspaceState {
 pub struct SidecarState {
     pub child: Arc<Mutex<Option<CommandChild>>>,
     pub port: Arc<Mutex<Option<u16>>>,
+    pub startup_lock: Arc<tauri::async_runtime::Mutex<()>>,
+    pub shutting_down: Arc<AtomicBool>,
 }
 
 pub fn create_sidecar_state() -> SidecarState {
     SidecarState {
         child: Arc::new(Mutex::new(None)),
         port: Arc::new(Mutex::new(None)),
+        startup_lock: Arc::new(tauri::async_runtime::Mutex::new(())),
+        shutting_down: Arc::new(AtomicBool::new(false)),
     }
+}
+
+fn sidecar_shutdown_error() -> String {
+    SIDECAR_SHUTDOWN_MESSAGE.to_string()
+}
+
+fn is_shutting_down(shutting_down: &AtomicBool) -> bool {
+    shutting_down.load(Ordering::SeqCst)
+}
+
+pub fn is_sidecar_shutdown_error(error: &str) -> bool {
+    error == SIDECAR_SHUTDOWN_MESSAGE
 }
 
 /// Push API keys configuration to sidecar via stdin
@@ -138,11 +159,27 @@ pub fn push_config_to_sidecar(app: &tauri::AppHandle) -> Result<(), String> {
 }
 
 pub async fn start_sidecar(app: tauri::AppHandle) -> Result<u16, String> {
-    let (child_ref, port_ref) = {
+    let (child_ref, port_ref, startup_lock, shutting_down) = {
         let state = app.state::<SidecarState>();
-        (Arc::clone(&state.child), Arc::clone(&state.port))
+        (
+            Arc::clone(&state.child),
+            Arc::clone(&state.port),
+            Arc::clone(&state.startup_lock),
+            Arc::clone(&state.shutting_down),
+        )
     };
-    start_sidecar_internal(app, child_ref, port_ref).await
+
+    if is_shutting_down(shutting_down.as_ref()) {
+        return Err(sidecar_shutdown_error());
+    }
+
+    let _startup_guard = startup_lock.lock().await;
+
+    if is_shutting_down(shutting_down.as_ref()) {
+        return Err(sidecar_shutdown_error());
+    }
+
+    start_sidecar_internal(app, child_ref, port_ref, shutting_down).await
 }
 
 fn resolve_sidecar_app_support_dir() -> Result<String, String> {
@@ -629,8 +666,15 @@ async fn wait_for_sidecar_ready(
     interval: tokio::time::Duration,
     terminated_rx: tokio::sync::oneshot::Receiver<SidecarTermination>,
     expected_startup_token: String,
+    shutting_down: Arc<AtomicBool>,
 ) -> Result<(), SidecarAttemptError> {
-    let health_check = wait_for_sidecar_health(port, timeout, interval, &expected_startup_token);
+    let health_check = wait_for_sidecar_health(
+        port,
+        timeout,
+        interval,
+        &expected_startup_token,
+        shutting_down,
+    );
     tokio::pin!(health_check);
     let mut terminated_rx = terminated_rx;
 
@@ -696,6 +740,7 @@ async fn wait_for_sidecar_health(
     timeout: tokio::time::Duration,
     interval: tokio::time::Duration,
     expected_startup_token: &str,
+    shutting_down: Arc<AtomicBool>,
 ) -> Result<(), String> {
     let started_at = tokio::time::Instant::now();
     let health_url = sidecar_health_url(port);
@@ -703,6 +748,10 @@ async fn wait_for_sidecar_health(
     let mut last_error = String::from("Sidecar did not respond yet");
 
     loop {
+        if is_shutting_down(shutting_down.as_ref()) {
+            return Err(sidecar_shutdown_error());
+        }
+
         if started_at.elapsed() >= timeout {
             return Err(format!(
                 "Sidecar health check timed out on port {} after {}ms: {}",
@@ -755,8 +804,13 @@ async fn start_sidecar_internal(
     app: tauri::AppHandle,
     child_ref: Arc<Mutex<Option<CommandChild>>>,
     port_ref: Arc<Mutex<Option<u16>>>,
+    shutting_down: Arc<AtomicBool>,
 ) -> Result<u16, String> {
     clear_sidecar_port(&port_ref);
+
+    if is_shutting_down(shutting_down.as_ref()) {
+        return Err(sidecar_shutdown_error());
+    }
 
     let mut last_error = String::from("Unknown sidecar startup failure");
     let app_support_dir = resolve_sidecar_app_support_dir()?;
@@ -785,7 +839,17 @@ async fn start_sidecar_internal(
         }
     }
 
+    if is_shutting_down(shutting_down.as_ref()) {
+        clear_sidecar_port(&port_ref);
+        return Err(sidecar_shutdown_error());
+    }
+
     for attempt in 1..=SIDECAR_START_MAX_ATTEMPTS {
+        if is_shutting_down(shutting_down.as_ref()) {
+            clear_sidecar_port(&port_ref);
+            return Err(sidecar_shutdown_error());
+        }
+
         let use_preferred_port = attempt == 1;
         let port = if use_preferred_port {
             PREFERRED_SIDECAR_PORT
@@ -828,6 +892,14 @@ async fn start_sidecar_internal(
             }
         };
 
+        if is_shutting_down(shutting_down.as_ref()) {
+            if let Err(e) = child.kill() {
+                error!("Failed to kill sidecar during shutdown: {}", e);
+            }
+            clear_sidecar_port(&port_ref);
+            return Err(sidecar_shutdown_error());
+        }
+
         // Store the child process handle
         match child_ref.lock() {
             Ok(mut guard) => {
@@ -856,6 +928,7 @@ async fn start_sidecar_internal(
             tokio::time::Duration::from_millis(SIDECAR_HEALTH_CHECK_INTERVAL_MS),
             monitor.terminated_rx,
             startup_token,
+            Arc::clone(&shutting_down),
         )
         .await
         {
@@ -867,6 +940,11 @@ async fn start_sidecar_internal(
                 kill_sidecar_process(&child_ref);
                 tokio::time::sleep(tokio::time::Duration::from_millis(SIDECAR_RETRY_DELAY_MS))
                     .await;
+
+                if is_shutting_down(shutting_down.as_ref()) {
+                    clear_sidecar_port(&port_ref);
+                    return Err(sidecar_shutdown_error());
+                }
 
                 let stderr_output = snapshot_stderr_output(&monitor.stderr_output);
                 let failure_kind = classify_startup_failure(&stderr_output);
@@ -932,9 +1010,13 @@ pub async fn wait_for_sidecar_port(
 
 /// Cleanup function: gracefully shutdown sidecar
 pub async fn cleanup_sidecar(app: tauri::AppHandle) {
+    let state = app.state::<SidecarState>();
+    state.shutting_down.store(true, Ordering::SeqCst);
+
+    let _startup_guard = state.startup_lock.lock().await;
+
     info!("Cleaning up sidecar...");
 
-    let state = app.state::<SidecarState>();
     let port_to_cleanup = match state.port.lock() {
         Ok(mut guard) => guard.take(),
         Err(e) => {
