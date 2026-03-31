@@ -16,7 +16,7 @@
 
 ### Updater signing key
 
-Mind Flayer uses a Tauri updater signing key pair. The public key is committed in [tauri.conf.json](/Users/didi/.codex/worktrees/be0e/mind-flayer/src-tauri/tauri.conf.json); the private key must stay secret.
+Mind Flayer uses a Tauri updater signing key pair. The public key is committed in [tauri.conf.json](../src-tauri/tauri.conf.json); the private key must stay secret.
 
 ```sh
 mkdir -p ~/.tauri
@@ -102,7 +102,7 @@ Then verify GitHub configuration:
 1. Confirm the required secret above exists in `Settings > Secrets and variables > Actions`.
 2. Confirm the repo is public and Actions are enabled.
 3. Confirm the `Release` workflow is present on the default branch.
-4. Confirm the updater private key in GitHub matches the public key committed in [tauri.conf.json](/Users/didi/.codex/worktrees/be0e/mind-flayer/src-tauri/tauri.conf.json).
+4. Ensure the updater private key in GitHub matches the public key committed in [tauri.conf.json](../src-tauri/tauri.conf.json).
 
 ## First end-to-end release validation
 

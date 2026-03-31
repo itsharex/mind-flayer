@@ -127,7 +127,13 @@ export function useAppUpdater() {
   }, [])
 
   const relaunchApp = useCallback(async () => {
-    await relaunchAfterUpdate()
+    try {
+      await relaunchAfterUpdate()
+    } catch (nextError) {
+      setError(toErrorMessage(nextError))
+      setStatus("error")
+      throw nextError
+    }
   }, [])
 
   return {
