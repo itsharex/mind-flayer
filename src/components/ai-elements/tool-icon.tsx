@@ -3,7 +3,7 @@ import {
   BookSearchIcon,
   GlobeIcon,
   LibraryBigIcon,
-  NotebookPenIcon,
+  Pencil,
   TerminalIcon,
   Trash2Icon,
   WrenchIcon
@@ -22,7 +22,7 @@ export function getToolIcon(toolName: string, className: string) {
     case "appendworkspacesection":
     case "replaceworkspacesection":
     case "appenddailymemory":
-      return <NotebookPenIcon className={className} />
+      return <Pencil className={className} />
     case "deleteworkspacefile":
       return <Trash2Icon className={className} />
     case "memorysearch":
