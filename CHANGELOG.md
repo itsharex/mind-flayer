@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.0](https://github.com/wangshunnn/mind-flayer/compare/v0.2.0...v0.3.0) (2026-04-04)
+
+### Features
+
+* implement file logging and enhance error handling in sidecar ([cb0ccd0](https://github.com/wangshunnn/mind-flayer/commit/cb0ccd0d2dc536395f7b14997aa79ebf4ace1637))
+
 ## [0.2.0](https://github.com/wangshunnn/mind-flayer/compare/v0.1.1...v0.2.0) (2026-04-03)
 
 ### Features
