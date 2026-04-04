@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.0](https://github.com/wangshunnn/mind-flayer/compare/v0.3.0...v0.4.0) (2026-04-04)
+
+### Features
+
+* add GitHub release URL handling and update UI for release page access ([aa2545a](https://github.com/wangshunnn/mind-flayer/commit/aa2545a1a99de89b33d27964f3fec1c551b4dfe2))
+
 ## [0.3.0](https://github.com/wangshunnn/mind-flayer/compare/v0.2.0...v0.3.0) (2026-04-04)
 
 ### Features
