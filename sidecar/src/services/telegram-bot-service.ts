@@ -375,14 +375,6 @@ export class TelegramBotService {
     const apiBaseUrl = telegramConfig?.baseUrl?.trim() || DEFAULT_TELEGRAM_API_BASE_URL
     const nextSignature = `${botToken}::${apiBaseUrl}`
 
-    this.logInfo("Refresh evaluation", {
-      enabled: telegramEnabled,
-      hasToken: Boolean(botToken),
-      hasSelectedModel: Boolean(selectedModel),
-      selectedModel: selectedModel ? `${selectedModel.provider}/${selectedModel.modelId}` : "none",
-      apiBaseUrl
-    })
-
     const shouldRun = telegramEnabled && Boolean(botToken) && Boolean(selectedModel)
     if (!shouldRun) {
       await this.stopRuntime("disabled or missing runtime dependencies")

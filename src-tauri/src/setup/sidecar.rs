@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     fs,
+    io::Write,
     net::TcpListener,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -34,6 +35,8 @@ const AGENT_WORKSPACE_DIR_NAME: &str = "workspace";
 const WORKSPACE_MEMORY_DIR_NAME: &str = "memory";
 const WORKSPACE_STATE_FILE_NAME: &str = "state.json";
 const WORKSPACE_BOOTSTRAP_FILE_NAME: &str = "BOOTSTRAP.md";
+const LOGS_DIR_NAME: &str = "logs";
+const HOST_LOG_FILE_NAME: &str = "host.log";
 const WORKSPACE_STATE_VERSION: u32 = 1;
 const SIDECAR_SHUTDOWN_MESSAGE: &str =
     "Sidecar startup skipped because application is shutting down";
@@ -192,6 +195,60 @@ fn current_timestamp_millis() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+fn get_host_log_path(app_support_dir: &str) -> PathBuf {
+    Path::new(app_support_dir)
+        .join(LOGS_DIR_NAME)
+        .join(HOST_LOG_FILE_NAME)
+}
+
+fn append_host_log_line(host_log_path: &Path, level: &str, message: &str) {
+    if let Some(parent_dir) = host_log_path.parent() {
+        if let Err(error) = fs::create_dir_all(parent_dir) {
+            eprintln!(
+                "Failed to create host log directory '{}': {}",
+                parent_dir.display(),
+                error
+            );
+            return;
+        }
+    }
+
+    let timestamp = current_timestamp_millis();
+    let normalized_message = message.trim_end();
+    match fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(host_log_path)
+    {
+        Ok(mut file) => {
+            if let Err(error) = writeln!(file, "[{}] [{}] {}", timestamp, level, normalized_message)
+            {
+                eprintln!(
+                    "Failed to write host log file '{}': {}",
+                    host_log_path.display(),
+                    error
+                );
+            }
+        }
+        Err(error) => {
+            eprintln!(
+                "Failed to open host log file '{}': {}",
+                host_log_path.display(),
+                error
+            );
+        }
+    }
+}
+
+fn should_persist_host_stdout(message: &str) -> bool {
+    let trimmed = message.trim_start();
+    trimmed.starts_with("Sidecar running on http://localhost:")
+        || trimmed.starts_with("API endpoint: http://localhost:")
+        || trimmed.starts_with("Shutting down gracefully...")
+        || trimmed.starts_with("Server closed, port released")
+        || trimmed.starts_with("Sidecar process exiting...")
 }
 
 fn load_workspace_state(state_path: &Path) -> Result<WorkspaceState, String> {
@@ -609,6 +666,7 @@ fn is_expected_health_payload(payload: &serde_json::Value, expected_startup_toke
 
 fn spawn_sidecar_event_monitor(
     mut rx: tauri::async_runtime::Receiver<CommandEvent>,
+    host_log_path: PathBuf,
 ) -> SidecarAttemptMonitor {
     let stderr_output = Arc::new(Mutex::new(String::new()));
     let stderr_output_for_task = Arc::clone(&stderr_output);
@@ -620,22 +678,36 @@ fn spawn_sidecar_event_monitor(
         while let Some(event) = rx.recv().await {
             match event {
                 CommandEvent::Stdout(line) => {
-                    debug!("[Sidecar] {}", String::from_utf8_lossy(&line));
+                    let text = String::from_utf8_lossy(&line).into_owned();
+                    debug!("[Sidecar] {}", text);
+                    if should_persist_host_stdout(&text) {
+                        append_host_log_line(&host_log_path, "STDOUT", &text);
+                    }
                 }
                 CommandEvent::Stderr(line) => {
                     let text = String::from_utf8_lossy(&line).into_owned();
                     error!("[Sidecar Error] {}", text);
                     append_stderr_output(&stderr_output_for_task, &text);
+                    append_host_log_line(&host_log_path, "STDERR", &text);
                 }
                 CommandEvent::Error(text) => {
                     error!("[Sidecar Process Error] {}", text);
                     append_stderr_output(&stderr_output_for_task, &text);
+                    append_host_log_line(&host_log_path, "PROCESS_ERROR", &text);
                 }
                 CommandEvent::Terminated(payload) => {
                     let termination = SidecarTermination::from_payload(payload);
                     warn!(
                         "Sidecar process terminated (code: {:?}, signal: {:?})",
                         termination.code, termination.signal
+                    );
+                    append_host_log_line(
+                        &host_log_path,
+                        "TERMINATED",
+                        &format!(
+                            "Sidecar process terminated (code: {:?}, signal: {:?}, reason: {})",
+                            termination.code, termination.signal, termination.reason
+                        ),
                     );
                     if let Some(tx) = terminated_tx.take() {
                         let _ = tx.send(termination);
@@ -646,6 +718,11 @@ fn spawn_sidecar_event_monitor(
         }
 
         if let Some(tx) = terminated_tx.take() {
+            append_host_log_line(
+                &host_log_path,
+                "TERMINATED",
+                "Sidecar process event stream closed",
+            );
             let _ = tx.send(SidecarTermination {
                 code: None,
                 signal: None,
@@ -920,7 +997,7 @@ async fn start_sidecar_internal(
             }
         }
 
-        let monitor = spawn_sidecar_event_monitor(rx);
+        let monitor = spawn_sidecar_event_monitor(rx, get_host_log_path(&app_support_dir));
 
         match wait_for_sidecar_ready(
             port,

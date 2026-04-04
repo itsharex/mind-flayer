@@ -139,4 +139,33 @@ describe("workspace helpers", () => {
     expect(results.some(result => result.path === "memory/2026-03-27.md")).toBe(true)
     expect(results.some(result => result.path === "MEMORY.md")).toBe(true)
   })
+
+  it("falls back to regex tokenization when Intl.Segmenter is unavailable", async () => {
+    const originalSegmenter = Intl.Segmenter
+
+    await seedWorkspaceFile(
+      appSupportDir,
+      "memory/2026-03-25.md",
+      "今天在看租房，想找安静一点的房子。"
+    )
+
+    try {
+      Object.defineProperty(Intl, "Segmenter", {
+        configurable: true,
+        writable: true,
+        value: undefined
+      })
+
+      const results = await searchMemory("租房 房子")
+
+      expect(results).not.toHaveLength(0)
+      expect(results[0]?.path).toBe("memory/2026-03-25.md")
+    } finally {
+      Object.defineProperty(Intl, "Segmenter", {
+        configurable: true,
+        writable: true,
+        value: originalSegmenter
+      })
+    }
+  })
 })

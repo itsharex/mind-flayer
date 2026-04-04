@@ -45,12 +45,18 @@ Use this when you need to recall past context without loading all memory files i
     execute: async ({ query, maxResults }) => {
       try {
         const results = await searchMemory(query, maxResults)
+
         return {
           query,
           totalResults: results.length,
           results
         }
       } catch (error) {
+        console.error("[sidecar] memorySearch failed", {
+          maxResults,
+          error: error instanceof Error ? error.message : String(error)
+        })
+
         throw new Error(
           `Failed to search memory: ${error instanceof Error ? error.message : String(error)}`
         )

@@ -31,6 +31,10 @@ const WORKSPACE_FILE_CHAR_LIMIT = 20_000
 const WORKSPACE_TOTAL_CHAR_LIMIT = 80_000
 const TRUNCATION_MARKER = "\n\n[Truncated to fit prompt budget]"
 const DAILY_MEMORY_FILE_REGEX = /^memory\/(\d{4}-\d{2}-\d{2})\.md$/
+const LETTER_OR_NUMBER_REGEX = /[\p{L}\p{N}]/u
+const WORDISH_TOKEN_REGEX = /[\p{L}\p{N}]+/gu
+const EAST_ASIAN_SCRIPT_REGEX =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
 
 const SECTION_FILE_NAMES = new Set([
   USER_FILE_NAME,
@@ -763,14 +767,13 @@ function tokenizeText(value: string): string[] {
     return []
   }
 
-  if (typeof Intl.Segmenter === "function") {
-    const segmenter = new Intl.Segmenter(undefined, { granularity: "word" })
-    return Array.from(segmenter.segment(normalized))
-      .map(segment => segment.segment.trim())
-      .filter(segment => Boolean(segment) && /[\p{L}\p{N}]/u.test(segment))
-  }
-
-  return normalized.split(/[^\p{L}\p{N}]+/u).filter(Boolean)
+  // Avoid Intl.Segmenter here. The packaged sidecar runtime can crash at the
+  // native layer when segmenting CJK queries, which bypasses JS error handling.
+  return (normalized.match(WORDISH_TOKEN_REGEX) ?? []).flatMap(token =>
+    EAST_ASIAN_SCRIPT_REGEX.test(token)
+      ? Array.from(token).filter(character => LETTER_OR_NUMBER_REGEX.test(character))
+      : [token]
+  )
 }
 
 function scoreSnippet(
