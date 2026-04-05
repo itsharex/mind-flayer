@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.5.0](https://github.com/wangshunnn/mind-flayer/compare/v0.4.0...v0.5.0) (2026-04-05)
+
+### Features
+
+* enhance install handling in AppUpdaterOwner and add unit tests ([176e88c](https://github.com/wangshunnn/mind-flayer/commit/176e88c177fcbe0c9a3d2bfdd95bf86ec4feb684))
+
 ## [0.4.0](https://github.com/wangshunnn/mind-flayer/compare/v0.3.0...v0.4.0) (2026-04-04)
 
 ### Features
