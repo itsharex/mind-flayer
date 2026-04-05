@@ -199,13 +199,27 @@ export function AppUpdaterOwner() {
         return
       }
 
+      if (action === "install") {
+        isOperationInFlightRef.current = true
+
+        const installPromise = runInstallUpdate()
+
+        await respond(responseEvent, { error: null, ok: true })
+
+        void installPromise
+          .catch(() => undefined)
+          .finally(() => {
+            isOperationInFlightRef.current = false
+          })
+
+        return
+      }
+
       isOperationInFlightRef.current = true
 
       try {
         if (action === "check") {
           await runCheckForUpdates(silent)
-        } else if (action === "install") {
-          await runInstallUpdate()
         } else if (action === "relaunch") {
           await runRelaunchApp()
         }
