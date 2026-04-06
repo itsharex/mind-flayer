@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.0](https://github.com/wangshunnn/mind-flayer/compare/v0.5.0...v0.6.0) (2026-04-06)
+
+### Features
+
+* **ui:** replace ArrowUpRightIcon with SquareArrowOutUpRightIcon in SkillsPane and AboutSection ([e293fd8](https://github.com/wangshunnn/mind-flayer/commit/e293fd825c92452e7dcf1d4489c311c0ba4a9686))
+
+### Bug Fixes
+
+* **ui:** remove unused SparklesIcon from Settings section mapping ([0d5cb26](https://github.com/wangshunnn/mind-flayer/commit/0d5cb26f1e4a1a4e0f49f60655b97e84fd837dce))
+
 ## [0.5.0](https://github.com/wangshunnn/mind-flayer/compare/v0.4.0...v0.5.0) (2026-04-05)
 
 ### Features
